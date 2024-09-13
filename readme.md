@@ -47,7 +47,7 @@ nfft = NFFT(N, m, sigma)
 M = 20000 # number of basis points
 batch_dimension = 2 # batches of basis points
 # basis points, NFFT will be taken wrt the second dimension
-k = (torch.rand((batch_dimension,J,),device=device,dtype=float_type,) - 0.5) 
+k = (torch.rand((batch_dimension,M,),device=device,dtype=float_type,) - 0.5) 
 
 # forward NFFT
 f_hat = torch.randn((k.shape[0], N), dtype=complex_type, device=device) # Fourier coefficients
