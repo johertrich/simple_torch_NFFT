@@ -1,17 +1,16 @@
 # Very simple but vectorized torch implementation of the NFFT
 
 This repository contains a very simple implementation of the non-equispaced fast Fourier transform (NFFT)
-implemented directly in PyTorch. It runs on a GPU, supports autograd and vectorization (so far only wrt the basis points).
+implemented directly in PyTorch. It runs on a GPU, supports autograd and vectorization.
 In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions
 are computed during initialization of the initialization of the NFFT object.
 
 ## Comments towards the State of Implementation
 
 - so far only in 1D
-- so far only batching wrt the basis points
 - so far only autograd wrt f/f_hat not wrt basis points
 - oversampled and non-oversampled number of Fourier coefficients should be even
-- autograd not tested yet 
+- autograd not tested yet (probably it contains some typos)
 - more efficient with small cutoff parameters...
 
 ## Requirements
@@ -31,30 +30,35 @@ The NFFT can be called as follows.
 import torch
 from simple_torch_NFFT import NFFT
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 # Parameters of the NFFT
-N = 2**10 # number of Fourier coefficients
-m = 4 # window size
-sigma = 2 # oversampling ratio
+N = 2**10  # number of Fourier coefficients
+m = 4  # window size
+sigma = 2  # oversampling ratio
 
 # create NFFT object
-nfft = NFFT(N, m, sigma) 
-# optional arguments are 
+nfft = NFFT(N, m, sigma)
+# optional arguments are
 # window (default simple_torch_NFFT.KaiserBesselWindow, other option simple_torch_NFFT.GaussWindow)
 # device (default "cuda" if torch.cuda.is_available() else "cpu")
 # double_precision (default false)
 
 # Parameters of the input
-M = 20000 # number of basis points
-batch_dimension = 2 # batches of basis points
+M = 20000  # number of basis points
+batch_x = 2  # batches of basis points
+batch_f = 2  # batches of function values
 # basis points, NFFT will be taken wrt the second dimension
-k = (torch.rand((batch_dimension,M,),device=device,dtype=float_type,) - 0.5) 
+k = (torch.rand((batch_x, 1, M,), device=device,) - 0.5 )
 
 # forward NFFT
-f_hat = torch.randn((k.shape[0], N), dtype=complex_type, device=device) # Fourier coefficients
+f_hat = torch.randn(
+    (k.shape[0], batch_f, N), dtype=torch.complex64, device=device
+)  # Fourier coefficients
 f = nfft(k, f_hat)
 
 # adjoint NFFT
-f = torch.randn(k.shape, dtype=complex_type, device=device) # function values
+f = torch.randn(k.shape, dtype=torch.complex64, device=device)  # function values
 f_hat = nfft.adjoint(k, f)
 
 ```

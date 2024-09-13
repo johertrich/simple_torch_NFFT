@@ -5,6 +5,7 @@ import time
 
 try:
     import torch_nfft as tn
+
     torch_nfft_comparison = True
 except:
     print("torch_nfft cannot be loaded. Omit time comparison")
@@ -83,7 +84,8 @@ f = nfft(k, fHat)
 f_dft = torch.stack(
     [
         torch.stack(
-            [ndft_forward(k[i, 0], fHat[i, j], ft_grid) for j in range(fHat.shape[1])], 0
+            [ndft_forward(k[i, 0], fHat[i, j], ft_grid) for j in range(fHat.shape[1])],
+            0,
         )
         for i in range(k.shape[0])
     ],

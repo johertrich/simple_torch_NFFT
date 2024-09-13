@@ -36,15 +36,24 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     inds = (torch.ceil(n * x).long() - m)[None] + l
     increments = phi_conj(x[None] - inds.float() / n) * f[None]
     g_linear = torch.zeros(
-        (increments.shape[1] * increments.shape[2] * (n + 2 * m),), device=device, dtype=increments.dtype
+        (increments.shape[1] * increments.shape[2] * (n + 2 * m),),
+        device=device,
+        dtype=increments.dtype,
     )
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
-    inds = (inds + n // 2 + m).tile(1,1,f.shape[1],1) + (n + 2 * m) * torch.arange(
-        0, increments.shape[2], device=device, dtype=torch.long
-    )[None, None, :, None] + (n + 2 * m) * increments.shape[2] * torch.arange(
-        0, increments.shape[1], device=device, dtype=torch.long
-    )[None, :, None, None]
+    inds = (
+        (inds + n // 2 + m).tile(1, 1, f.shape[1], 1)
+        + (n + 2 * m)
+        * torch.arange(0, increments.shape[2], device=device, dtype=torch.long)[
+            None, None, :, None
+        ]
+        + (n + 2 * m)
+        * increments.shape[2]
+        * torch.arange(0, increments.shape[1], device=device, dtype=torch.long)[
+            None, :, None, None
+        ]
+    )
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
     g = g_linear.view(x.shape[0], f.shape[1], n + 2 * m)
     # handle overflows
@@ -80,11 +89,18 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     inds = (torch.ceil(n * x).long() - m)[None] + l
     increments = phi(x[None] - inds / n).to(torch.complex64)
     # % n to prevent overflows
-    inds = ((inds + n // 2) % n).tile(1,1,g.shape[1],1) + n * torch.arange(
-        0, g.shape[1], device=device, dtype=torch.long
-    )[None, None, :, None]  + n*g.shape[1] * torch.arange(
-        0, x.shape[0], device=device, dtype=torch.long
-    )[None, :, None, None]
+    inds = (
+        ((inds + n // 2) % n).tile(1, 1, g.shape[1], 1)
+        + n
+        * torch.arange(0, g.shape[1], device=device, dtype=torch.long)[
+            None, None, :, None
+        ]
+        + n
+        * g.shape[1]
+        * torch.arange(0, x.shape[0], device=device, dtype=torch.long)[
+            None, :, None, None
+        ]
+    )
     g_l = g.view(-1)[inds]
     g_l *= increments
     f = torch.sum(g_l, 0)
@@ -101,7 +117,7 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     # phi_hat starts with negtive indices
     # f_hat fängt mit negativen indizes an
     g_hat = f_hat / phi_hat
-    pad = torch.zeros((x.shape[0],f_hat.shape[1], (n - N) // 2), device=device)
+    pad = torch.zeros((x.shape[0], f_hat.shape[1], (n - N) // 2), device=device)
     g_hat = torch.fft.fftshift(torch.cat((pad, g_hat, pad), -1), [-1])
     g = torch.fft.ifftshift(
         torch.fft.fft(g_hat, norm="backward"), [-1]
