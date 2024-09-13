@@ -66,7 +66,7 @@ nfft=NFFT(N,m,sigma,device=device,double_precision=double_precision)
 
 J=100000
 k=(torch.rand((100,J,),device=device,dtype=float_type)-.5)
-runs=10
+runs=1
 #k=k[None,:]
 
 # test data
