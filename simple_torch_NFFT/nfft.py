@@ -28,26 +28,29 @@ def ndft_forward(x, fHat, fts):
 
 
 def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
-    # x is two-dimensional: batch_dim times basis points
-    # f has same size as x or is broadcastable
+    # x is three-dimensional: batch_x times 1 times #basis points
+    # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
     # n is even
     # phi_conj is function handle
-    l = torch.arange(0, 2 * m, device=device, dtype=torch.long).view(2 * m, 1, 1)
+    l = torch.arange(0, 2 * m, device=device, dtype=torch.long).view(2 * m, 1, 1, 1)
     inds = (torch.ceil(n * x).long() - m)[None] + l
-    increments = phi_conj(x[None, :, :] - inds.float() / n) * f
+    increments = phi_conj(x[None] - inds.float() / n) * f[None]
     g_linear = torch.zeros(
-        (x.shape[0] * (n + 2 * m),), device=device, dtype=increments.dtype
+        (increments.shape[1] * increments.shape[2] * (n + 2 * m),), device=device, dtype=increments.dtype
     )
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
-    inds = (inds + n // 2 + m) + (n + 2 * m) * torch.arange(
-        0, x.shape[0], device=device, dtype=torch.long
-    )[None, :, None]
+    inds = (inds.tile(1,1,f.shape[1],1) + n // 2 + m) + (n + 2 * m) * torch.arange(
+        0, increments.shape[2], device=device, dtype=torch.long
+    )[None, None, :, None]
+    + (n + 2 * m) * increments.shape[2] * torch.arange(
+        0, increments.shape[1], device=device, dtype=torch.long
+    )[None, :, None, None]
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
-    g = g_linear.view(x.shape[0], n + 2 * m)
+    g = g_linear.view(x.shape[0], f.shape[1], n + 2 * m)
     # handle overflows
-    g[:, -2 * m : -m] += g[:, :m]
-    g[:, m : 2 * m] += g[:, -m:]
+    g[:, :, -2 * m : -m] += g[:, :, :m]
+    g[:, :, m : 2 * m] += g[:, :, -m:]
     return g_linear.view(x.shape[0], n + 2 * m)[:, m:-m]
 
 
