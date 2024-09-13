@@ -25,7 +25,10 @@ pip install git+https://github.com/johertrich/simple_torch_NFFT
 
 ## Usage
 
+The NFFT can be called as follows.
+
 ```python
+import torch
 from simple_torch_NFFT import NFFT
 
 # Parameters of the NFFT
