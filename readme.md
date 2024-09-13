@@ -50,7 +50,7 @@ batch_dimension = 2 # batches of basis points
 k = (torch.rand((batch_dimension,J,),device=device,dtype=float_type,) - 0.5) 
 
 # forward NFFT
-f_hat = torch.randn((k.shape[0], N), dtype=complex_type, device=device)
+f_hat = torch.randn((k.shape[0], N), dtype=complex_type, device=device) # Fourier coefficients
 f = nfft(k, f_hat)
 
 # adjoint NFFT
