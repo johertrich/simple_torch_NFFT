@@ -71,10 +71,10 @@ def forward_nfft(x,f_hat,N,n,m,phi,phi_hat,device):
     # N ist gerade
     # phi_hat fängt mit negativen indizes an
     # f_hat fängt mit negativen indizes an
-    g_hat=f_hat/(N*phi_hat)
+    g_hat=f_hat/phi_hat
     pad=torch.zeros((x.shape[0],(n-N)//2),device=device)
     g_hat=torch.fft.fftshift(torch.cat((pad,g_hat,pad),1))
-    g=torch.fft.ifftshift(torch.fft.ifft(g_hat)) # damit g wieder auf [-1/2,1/2) lebt
+    g=torch.fft.ifftshift(torch.fft.ifft(g_hat,norm="forward")) # damit g wieder auf [-1/2,1/2) lebt
     f=sparse_convolution(x,g,n,m,x.shape[1],phi,device)
     # f hat die gleiche Größe wie x
     return f
