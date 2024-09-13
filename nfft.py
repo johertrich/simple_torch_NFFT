@@ -1,20 +1,24 @@
 import torch
 # Sehr einfache aber vektorisierte torch-implementierung der eindimensionalen NFFT.
-# Wenn die Punkte zu nah an -1/2 bzw. 1/2 sind gibts noch nen error, wegen einem overflow mit den l koeffizienten
+
+# Hat ein paar Nachteile:
+#  - Wenn die Punkte zu nah an -1/2 bzw. 1/2 sind gibts noch nen error, wegen einem overflow mit den l koeffizienten
+#  - Diese ganzen Indexoperationen machen die Backprobagation kaputt. Allerdings sollte man einfach die adjoint als Ableitung der 
+#    forward und umgekehrt setzen können...
 
 def ndft_adjoint(x,f,fts):
     # not vectorized adjoint NDFT for test purposes
-    fourier_tensor = torch.exp(-2j * torch.pi * fts[:,None]*x[None,:])
+    fourier_tensor = torch.exp(2j * torch.pi * fts[:,None]*x[None,:])
     y = torch.matmul(fourier_tensor, f[:,None])
     return y.squeeze()
     
 def ndft_forward(x,fHat,fts):
     # not vectorized forward NDFT for test purposes
-    fourier_tensor = torch.exp(2j * torch.pi * fts[None,:]*x[:,None])
+    fourier_tensor = torch.exp(-2j * torch.pi * fts[None,:]*x[:,None])
     y = torch.matmul(fourier_tensor, fHat[:,None])
     return y.squeeze()
 
-def transposed_sparse_convolution(x,f,n,m,phi_conj,device):
+def transposed_sparse_convolution(x,f,n,m,phi_conj,device,complex_type):
     # x ist zweidimensional: erst batch-dimension, dann die Stützpunkte
     # f hat die gleiche Größe wie x oder ist broadcastable
     # n ist gerade
@@ -23,12 +27,12 @@ def transposed_sparse_convolution(x,f,n,m,phi_conj,device):
     l=torch.arange(0,2*m,device=device,dtype=torch.long).view(2*m,1,1)
     inds=(torch.ceil(n*x).long()-m)[None]+l
     increments=phi_conj(x[None,:,:]-inds.float()/n)*f
-    g_linear=torch.zeros((x.shape[0]*n,),device=device,dtype=torch.complex64)
+    g_linear=torch.zeros((x.shape[0]*n,),device=device,dtype=complex_type)
     inds=(inds+n//2)+x.shape[1]*torch.arange(0,x.shape[0],device=device,dtype=torch.long)[:,None] # +n//2 weil index shift von -n/2 bis n/2-1 zu 0 bis n-1, anderer Term für lineare Indizes
     g_linear.index_put_((inds.view(-1),),increments.view(-1),accumulate=True)
     return g_linear.view(x.shape[0],-1)
 
-def adjoint_nfft(x,f,N,n,m,phi_conj,phi_hat,device):
+def adjoint_nfft(x,f,N,n,m,phi_conj,phi_hat,device,complex_type):
     # x ist zweidimensional: erst batch-dimension, dann die Stützpunkte
     # f hat die gleiche Größe wie x oder ist broadcastable
     # n ist gerade
@@ -37,9 +41,9 @@ def adjoint_nfft(x,f,N,n,m,phi_conj,phi_hat,device):
     # N ist gerade
     # phi_hat fängt mit negativen indizes an
     cut=(n-N)//2
-    g=transposed_sparse_convolution(x,f,n,m,phi_conj,device)
+    g=transposed_sparse_convolution(x,f,n,m,phi_conj,device,complex_type)
     g=torch.fft.ifftshift(g)
-    g_hat=torch.fft.fft(g)
+    g_hat=torch.fft.ifft(g,norm="forward")
     g_hat=torch.fft.fftshift(g_hat)[:,cut:-cut]
     f_hat=g_hat/phi_hat
     # f_hat fängt mit negativen indizes an
@@ -74,13 +78,13 @@ def forward_nfft(x,f_hat,N,n,m,phi,phi_hat,device):
     g_hat=f_hat/phi_hat
     pad=torch.zeros((x.shape[0],(n-N)//2),device=device)
     g_hat=torch.fft.fftshift(torch.cat((pad,g_hat,pad),1))
-    g=torch.fft.ifftshift(torch.fft.ifft(g_hat,norm="forward")) # damit g wieder auf [-1/2,1/2) lebt
+    g=torch.fft.ifftshift(torch.fft.fft(g_hat,norm="backward")) # damit g wieder auf [-1/2,1/2) lebt
     f=sparse_convolution(x,g,n,m,x.shape[1],phi,device)
     # f hat die gleiche Größe wie x
     return f
     
 class KaiserBesselWindow(torch.nn.Module):
-    def __init__(self,n,N,m,sigma,device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self,n,N,m,sigma,device='cuda' if torch.cuda.is_available() else 'cpu',float_type=torch.float32):
         # n: Anzahl der oversampled Fourierkoeffizienten
         # N: Anzahl der nicht-oversampled Fourierkoeffizienten
         # m: Window size
@@ -90,7 +94,7 @@ class KaiserBesselWindow(torch.nn.Module):
         self.N=N
         self.m=m
         self.sigma=sigma
-        inds=torch.arange(-self.N//2,self.N//2,dtype=torch.float32,device=device)
+        inds=torch.arange(-self.N//2,self.N//2,dtype=float_type,device=device)
         self.ft=self.Fourier_coefficients(inds)
 
     def forward(self,k):
@@ -99,17 +103,17 @@ class KaiserBesselWindow(torch.nn.Module):
         arg=torch.sqrt(self.m**2-self.n**2*k**2)
         out[torch.abs(k)<self.m/self.n]=(torch.sinh(b*arg)/(arg*torch.pi))[torch.abs(k)<self.m/self.n] # das * pi ist in Gabis Buch nicht drin... Aber in NFFT.jl
         out[torch.abs(k)>self.m/self.n]=0
-        return out/1e10
+        return out
         
     def conj(self,k):
         return torch.conj(self(k))        
         
     def Fourier_coefficients(self,inds):
         b=(2-1/self.sigma)*torch.pi
-        return torch.special.i0(self.m*torch.sqrt(b**2-(2*torch.pi*inds/self.n)**2))/1e10
+        return torch.special.i0(self.m*torch.sqrt(b**2-(2*torch.pi*inds/self.n)**2))
     
 class NFFT(torch.nn.Module):
-    def __init__(self,N,m,sigma,window=None,device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self,N,m,sigma,window=None,device='cuda' if torch.cuda.is_available() else 'cpu',double_precision=False):
         # N: Anzahl Fourierkoeffizienten
         # sigma: oversampling
         # m: Window size
@@ -118,8 +122,10 @@ class NFFT(torch.nn.Module):
         self.n=int(sigma*N)
         self.m=m
         self.device=device
+        self.float_type=torch.float64 if double_precision else torch.float32
+        self.complex_type=torch.complex128 if double_precision else torch.complex64
         if window is None:
-            self.window=KaiserBesselWindow(self.n,self.N,self.m,self.n/self.N,device=device)
+            self.window=KaiserBesselWindow(self.n,self.N,self.m,self.n/self.N,device=device,float_type=self.float_type)
         else:
             self.window=window
 
@@ -127,6 +133,6 @@ class NFFT(torch.nn.Module):
         return forward_nfft(x,f_hat,self.N,self.n,self.m,self.window.conj,self.window.ft,self.device)
 
     def adjoint(self,x,f): # TODO redefine autograd
-        return adjoint_nfft(x,f,self.N,self.n,self.m,self.window,self.window.ft,self.device)
+        return adjoint_nfft(x,f,self.N,self.n,self.m,self.window,self.window.ft,self.device,self.complex_type)
 
 
