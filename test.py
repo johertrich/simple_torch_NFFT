@@ -5,7 +5,7 @@ import time
 
 import torch_nfft as tn
 
-device='cpu'
+device='cuda'
 double_precision=False
 float_type=torch.float64 if double_precision else torch.float32
 complex_type=torch.complex128 if double_precision else torch.complex64
