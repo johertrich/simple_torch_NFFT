@@ -12,7 +12,7 @@ complex_type=torch.complex128 if double_precision else torch.complex64
 N=2**10
 J=20000
 k=(torch.rand((2,J,),device=device,dtype=float_type)-.5)
-m=4
+m=8
 sigma=2
 
 n=2*N
