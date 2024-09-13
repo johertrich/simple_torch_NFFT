@@ -72,11 +72,12 @@ class KaiserBesselWindow(torch.nn.Module):
         # n: Anzahl der oversampled Fourierkoeffizienten
         # m: Window size
         # sigma: oversampling --> Warum??? --> Damit die Fourietrreihe 0 wird außerhalb von -n/2,n/2-1 !!!
+        super().__init__()
         self.n=n
         self.m=m
         self.sigma=sigma
         inds=torch.arange(-self.n//2,self.n//2-1)
-        self.ft=self.window.Fourier_coefficients(inds)
+        self.ft=self.Fourier_coefficients(inds)
 
     def forward(self,k):
         # undefined for abs(k)>self.m/self.n
@@ -98,7 +99,7 @@ class NFFT(torch.nn.Module):
         # m: Window size
         super().__init__()
         self.N=N # Anzahl Fourierkoeffizienten
-        self.n=int(sigma*N)+1
+        self.n=int(sigma*N)
         self.m=m
         self.device=device
         if window is None:
