@@ -2,11 +2,9 @@ from simple_torch_NFFT import NFFT
 from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
 import torch
 import time
-from nfft import NFFT as NFFT_unbatched
 
 try:
     import torch_nfft as tn
-
     torch_nfft_comparison = True
 except:
     print("torch_nfft cannot be loaded. Omit time comparison")
@@ -41,14 +39,13 @@ ft_grid = torch.arange(-N // 2, N // 2, dtype=float_type, device=device)
 
 # init nfft
 nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
-nfft_ = NFFT_unbatched(N, m, sigma, device=device, double_precision=double_precision)
 
 #################################
 ###### Test adjoint... ##########
 #################################
 
 # test data
-f = torch.randn((k.shape[0], 1, k.shape[2]), dtype=complex_type, device=device)
+f = torch.randn((k.shape[0], 2, k.shape[2]), dtype=complex_type, device=device)
 
 # compute NFFT
 fHat = nfft.adjoint(k, f)
@@ -72,20 +69,25 @@ print(
     ),
 )
 
-exit()
 #################################
 ###### Test forward... ##########
 #################################
 
 # test data
-fHat = torch.randn((k.shape[0], N), dtype=complex_type, device=device)
+fHat = torch.randn((k.shape[0], 2, N), dtype=complex_type, device=device)
 
 # compute NFFT
 f = nfft(k, fHat)
 
 # comparison with NDFT
 f_dft = torch.stack(
-    [ndft_forward(k[i], fHat[i], ft_grid) for i in range(k.shape[0])], 0
+    [
+        torch.stack(
+            [ndft_forward(k[i, 0], fHat[i, j], ft_grid) for j in range(fHat.shape[1])], 0
+        )
+        for i in range(k.shape[0])
+    ],
+    0,
 )
 
 # relative error

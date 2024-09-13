@@ -40,7 +40,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     )
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
-    inds = (inds.tile(1,1,f.shape[1],1) + n // 2 + m) + (n + 2 * m) * torch.arange(
+    inds = (inds + n // 2 + m).tile(1,1,f.shape[1],1) + (n + 2 * m) * torch.arange(
         0, increments.shape[2], device=device, dtype=torch.long
     )[None, None, :, None] + (n + 2 * m) * increments.shape[2] * torch.arange(
         0, increments.shape[1], device=device, dtype=torch.long
@@ -76,37 +76,37 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     # g lives on (discretized) [-1/2,1/2)
     # n is even
     # phi is function handle
-    l = torch.arange(0, 2 * m, device=device, dtype=torch.long).view(2 * m, 1, 1)
-    inds = (torch.ceil(n * x).long() - m)[None, :, :] + l
-    increments = phi(x[None, :, :] - inds / n).to(torch.complex64)
-    inds = ((inds + n // 2) % n) + n * torch.arange(
+    l = torch.arange(0, 2 * m, device=device, dtype=torch.long).view(2 * m, 1, 1, 1)
+    inds = (torch.ceil(n * x).long() - m)[None] + l
+    increments = phi(x[None] - inds / n).to(torch.complex64)
+    # % n to prevent overflows
+    inds = ((inds + n // 2) % n).tile(1,1,g.shape[1],1) + n * torch.arange(
+        0, g.shape[1], device=device, dtype=torch.long
+    )[None, None, :, None]  + n*g.shape[1] * torch.arange(
         0, x.shape[0], device=device, dtype=torch.long
-    )[
-        :, None
-    ]  # % n to prevent overflows
-    # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
-    g_l = g.view(-1)[inds].view(increments.shape)
-    increments *= g_l
-    f = torch.sum(increments, 0)
+    )[None, :, None, None]
+    g_l = g.view(-1)[inds]
+    g_l *= increments
+    f = torch.sum(g_l, 0)
     return f
 
 
 @torch.compile
 def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
-    # x is two-dimensional: batch_dim times basis points
-    # f_hat has size (batch_size,N)
+    # x is three-dimensional: batch_x times 1 times #basis points
+    # f_hat has size (batch_x,batch_f,N)
     # n is even
     # phi is function handle
     # N is even
     # phi_hat starts with negtive indices
     # f_hat fängt mit negativen indizes an
     g_hat = f_hat / phi_hat
-    pad = torch.zeros((x.shape[0], (n - N) // 2), device=device)
-    g_hat = torch.fft.fftshift(torch.cat((pad, g_hat, pad), 1), [-1])
+    pad = torch.zeros((x.shape[0],f_hat.shape[1], (n - N) // 2), device=device)
+    g_hat = torch.fft.fftshift(torch.cat((pad, g_hat, pad), -1), [-1])
     g = torch.fft.ifftshift(
         torch.fft.fft(g_hat, norm="backward"), [-1]
     )  # shift such that g lives again on [-1/2,1/2)
-    f = sparse_convolution(x, g, n, m, x.shape[1], phi, device)
+    f = sparse_convolution(x, g, n, m, x.shape[2], phi, device)
     # f has same size as x
     return f
 
