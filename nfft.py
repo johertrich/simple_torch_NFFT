@@ -99,14 +99,14 @@ class KaiserBesselWindow(torch.nn.Module):
         arg=torch.sqrt(self.m**2-self.n**2*k**2)
         out[torch.abs(k)<self.m/self.n]=(torch.sinh(b*arg)/(arg*torch.pi))[torch.abs(k)<self.m/self.n] # das * pi ist in Gabis Buch nicht drin... Aber in NFFT.jl
         out[torch.abs(k)>self.m/self.n]=0
-        return out
+        return out/1e10
         
     def conj(self,k):
         return torch.conj(self(k))        
         
     def Fourier_coefficients(self,inds):
         b=(2-1/self.sigma)*torch.pi
-        return torch.special.i0(self.m*torch.sqrt(b**2-(2*torch.pi*inds/self.n)**2))
+        return torch.special.i0(self.m*torch.sqrt(b**2-(2*torch.pi*inds/self.n)**2))/1e10
     
 class NFFT(torch.nn.Module):
     def __init__(self,N,m,sigma,window=None,device='cuda' if torch.cuda.is_available() else 'cpu'):
