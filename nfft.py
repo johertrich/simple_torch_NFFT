@@ -63,19 +63,54 @@ def forward_nfft(x,f_hat,N,n,m,phi,phi_hat,device):
     pad=torch.zeros((x.shape[0],(n-N)//2),device=device)
     g_hat=torch.fft.ifftshift(torch.cat((pad,g_hat,pad),1))
     g=torch.fft.fftshift(torch.fft.ifft(g_hat)) # damit g wieder auf [-1/2,1/2) lebt
-    f=sparse_convolution(x,g,n,m,M,phi)
+    f=sparse_convolution(x,g,n,m,x.shape[1],phi)
     # f hat die gleiche Größe wie x
     return f
+    
+class KaiserBesselWindow(torch.nn.Module):
+    def __init__(self,n,m,sigma,device='cuda' if torch.cuda.is_available() else 'cpu'):
+        # n: Anzahl der oversampled Fourierkoeffizienten
+        # m: Window size
+        # sigma: oversampling --> Warum??? --> Damit die Fourietrreihe 0 wird außerhalb von -n/2,n/2-1 !!!
+        self.n=n
+        self.m=m
+        self.sigma=sigma
+        inds=torch.arange(-self.n//2,self.n//2-1)
+        self.ft=self.window.Fourier_coefficients(inds)
 
+    def forward(self,k):
+        # undefined for abs(k)>self.m/self.n
+        b=(2-1/self.sigma)*torch.pi
+        out=b/torch.pi*torch.ones_like(k)
+        arg=torch.sqrt(self.m**2-self.n**2*k**2)
+        out[torch.abs(k)<self.m/self.n]=(torch.sinh(b*arg)/(arg*torch.pi))[torch.abs(k)<self.m/self.n] # das * pi ist in Gabis Buch nicht drin... Aber in NFFT.jl
+        return out
+        
+        
+    def Fourier_coefficients(self,inds):
+        b=(2-1/self.sigma)*torch.pi
+        return torch.special.bessel_j0(self.m*torch.sqrt(b**2-(2*torch.pi*inds/self.n)**2))
+    
 class NFFT(torch.nn.Module):
-    def __init__(self,device='cuda' if torch.cuda.is_available() else 'cpu'):
-        exit()
+    def __init__(self,N,m,sigma,window=None,device='cuda' if torch.cuda.is_available() else 'cpu'):
+        # N: Anzahl Fourierkoeffizienten
+        # sigma: oversampling
+        # m: Window size
+        super().__init__()
+        self.N=N # Anzahl Fourierkoeffizienten
+        self.n=int(sigma*N)+1
+        self.m=m
+        self.device=device
+        if window is None:
+            self.window=KaiserBesselWindow(self.n,self.m,self.n/self.N,device=device)
+        else:
+            self.window=window
 
     def forward(self,x,f_hat): # TODO redefine autograd
-        return
+        return forward_nfft(x,f_hat,self.N,self.n,self.m,self.window,self.window.ft,self.device)
 
     def adjoint(self,x,f): # TODO redefine autograd
-        return
+        return adjoint_nfft(x,f,self.N,self.n,self.m,self.window,self.window.ft,self.device)
 
 
 if __name__=='__main__':
