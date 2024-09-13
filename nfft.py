@@ -6,7 +6,8 @@ import torch
 # - so far only batching wrt the basis points
 # - so far only autograd wrt f/f_hat not wrt basis points
 # - oversampled and non-oversampled number of Fourier coefficients should be even
-# 
+# - autograd not tested yet 
+#
 # Other comments at functions in the code
 
 def ndft_adjoint(x,f,fts):
