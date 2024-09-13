@@ -2,6 +2,18 @@ import torch
 # Sehr einfache aber vektorisierte torch-implementierung der eindimensionalen NFFT.
 # Wenn die Punkte zu nah an -1/2 bzw. 1/2 sind gibts noch nen error, wegen einem overflow mit den l koeffizienten
 
+def ndft_adjoint(x,f,fts):
+    # not vectorized adjoint NDFT for test purposes
+    fourier_tensor = torch.exp(-2j * torch.pi * fts[:,None]*x[None,:])
+    y = torch.matmul(fourier_tensor, f[:,None])
+    return y.squeeze()
+    
+def ndft_forward(x,fHat,fts):
+    # not vectorized forward NDFT for test purposes
+    fourier_tensor = torch.exp(2j * torch.pi * fts[None,:]*x[:,None])
+    y = torch.matmul(fourier_tensor, fHat[:,None])
+    return y.squeeze()
+
 def transposed_sparse_convolution(x,f,n,m,phi_conj,device):
     # x ist zweidimensional: erst batch-dimension, dann die Stützpunkte
     # f hat die gleiche Größe wie x oder ist broadcastable
@@ -10,8 +22,7 @@ def transposed_sparse_convolution(x,f,n,m,phi_conj,device):
     # phi_conj ist function handle
     l=torch.arange(0,2*m,device=device,dtype=torch.long).view(2*m,1,1)
     inds=(torch.ceil(n*x).long()-m)[None]+l
-    increments=phi_conj(x[None,:,:]-inds/n)*f
-    
+    increments=phi_conj(x[None,:,:]-inds.float()/n)*f
     g_linear=torch.zeros((x.shape[0]*n,),device=device,dtype=torch.complex64)
     inds=(inds+n//2)+x.shape[1]*torch.arange(0,x.shape[0],device=device,dtype=torch.long)[:,None] # +n//2 weil index shift von -n/2 bis n/2-1 zu 0 bis n-1, anderer Term für lineare Indizes
     g_linear.index_put_((inds.view(-1),),increments.view(-1),accumulate=True)
@@ -30,7 +41,7 @@ def adjoint_nfft(x,f,N,n,m,phi_conj,phi_hat,device):
     g=torch.fft.ifftshift(g)
     g_hat=torch.fft.fft(g)
     g_hat=torch.fft.fftshift(g_hat)[:,cut:-cut]
-    f_hat=g_hat/(n*phi_hat)
+    f_hat=g_hat/phi_hat
     # f_hat fängt mit negativen indizes an
     return f_hat
 
@@ -62,8 +73,8 @@ def forward_nfft(x,f_hat,N,n,m,phi,phi_hat,device):
     # f_hat fängt mit negativen indizes an
     g_hat=f_hat/(N*phi_hat)
     pad=torch.zeros((x.shape[0],(n-N)//2),device=device)
-    g_hat=torch.fft.ifftshift(torch.cat((pad,g_hat,pad),1))
-    g=torch.fft.fftshift(torch.fft.ifft(g_hat)) # damit g wieder auf [-1/2,1/2) lebt
+    g_hat=torch.fft.fftshift(torch.cat((pad,g_hat,pad),1))
+    g=torch.fft.ifftshift(torch.fft.ifft(g_hat)) # damit g wieder auf [-1/2,1/2) lebt
     f=sparse_convolution(x,g,n,m,x.shape[1],phi,device)
     # f hat die gleiche Größe wie x
     return f
@@ -83,13 +94,15 @@ class KaiserBesselWindow(torch.nn.Module):
         self.ft=self.Fourier_coefficients(inds)
 
     def forward(self,k):
-        # undefined for abs(k)>self.m/self.n
         b=(2-1/self.sigma)*torch.pi
         out=b/torch.pi*torch.ones_like(k)
         arg=torch.sqrt(self.m**2-self.n**2*k**2)
         out[torch.abs(k)<self.m/self.n]=(torch.sinh(b*arg)/(arg*torch.pi))[torch.abs(k)<self.m/self.n] # das * pi ist in Gabis Buch nicht drin... Aber in NFFT.jl
+        out[torch.abs(k)>self.m/self.n]=0
         return out
         
+    def conj(self,k):
+        return torch.conj(self(k))        
         
     def Fourier_coefficients(self,inds):
         b=(2-1/self.sigma)*torch.pi
@@ -111,7 +124,7 @@ class NFFT(torch.nn.Module):
             self.window=window
 
     def forward(self,x,f_hat): # TODO redefine autograd
-        return forward_nfft(x,f_hat,self.N,self.n,self.m,self.window,self.window.ft,self.device)
+        return forward_nfft(x,f_hat,self.N,self.n,self.m,self.window.conj,self.window.ft,self.device)
 
     def adjoint(self,x,f): # TODO redefine autograd
         return adjoint_nfft(x,f,self.N,self.n,self.m,self.window,self.window.ft,self.device)
