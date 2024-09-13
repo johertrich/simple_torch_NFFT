@@ -15,7 +15,7 @@ implemented directly in PyTorch. It runs on a GPU, supports autograd and vectori
 
 ## Requirements
 
-Just Python (I tested it with 3.12) and PyTorch (>= version 2.4, because otherwise torch.compile has issues with Python 3.12).
+Just PyTorch (version >= 2.4, because otherwise torch.compile has issues with Python 3.12).
 The package can be installed with
 
 ```
