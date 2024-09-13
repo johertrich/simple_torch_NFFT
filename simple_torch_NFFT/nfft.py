@@ -51,7 +51,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # handle overflows
     g[:, :, -2 * m : -m] += g[:, :, :m]
     g[:, :, m : 2 * m] += g[:, :, -m:]
-    return g_linear.view(x.shape[0], n + 2 * m)[:, m:-m]
+    return g[:, m:-m]
 
 
 @torch.compile
@@ -152,7 +152,7 @@ class ForwardNFFT(torch.autograd.Function):
         if ctx.needs_input_grad[1]:
             # call adjoint_nfft in the backward pass
             # assume that phi is real-valued (otherwise we would need a conjugate around the phi here)
-            grad_f_hat = djoint_nfft(x, grad_output, N, n, m, phi, phi_hat, device)
+            grad_f_hat = adjoint_nfft(x, grad_output, N, n, m, phi, phi_hat, device)
 
         return None, grad_f_hat, None, None, None, None, None, None
 
