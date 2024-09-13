@@ -130,5 +130,3 @@ class NFFT(torch.nn.Module):
         return adjoint_nfft(x,f,self.N,self.n,self.m,self.window,self.window.ft,self.device)
 
 
-if __name__=='__main__':
-    print(transposed_sparse_convolution(torch.rand(3,3),torch.rand(3,3),1000,4,lambda x:x,'cpu').shape)
