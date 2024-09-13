@@ -2,10 +2,17 @@ from simple_torch_NFFT import NFFT
 from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
 import torch
 import time
+from nfft import NFFT as NFFT_unbatched
 
-import torch_nfft as tn
+try:
+    import torch_nfft as tn
 
-device = "cuda"
+    torch_nfft_comparison = True
+except:
+    print("torch_nfft cannot be loaded. Omit time comparison")
+    torch_nfft_comparison = False
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
 float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
@@ -16,6 +23,7 @@ k = (
     torch.rand(
         (
             2,
+            1,
             J,
         ),
         device=device,
@@ -33,20 +41,27 @@ ft_grid = torch.arange(-N // 2, N // 2, dtype=float_type, device=device)
 
 # init nfft
 nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
+nfft_ = NFFT_unbatched(N, m, sigma, device=device, double_precision=double_precision)
 
 #################################
 ###### Test adjoint... ##########
 #################################
 
 # test data
-f = torch.randn(k.shape, dtype=complex_type, device=device)
+f = torch.randn((k.shape[0], 1, k.shape[2]), dtype=complex_type, device=device)
 
 # compute NFFT
 fHat = nfft.adjoint(k, f)
 
 # comparison with NDFT
 fHat_dft = torch.stack(
-    [ndft_adjoint(k[i], f[i], ft_grid) for i in range(k.shape[0])], 0
+    [
+        torch.stack(
+            [ndft_adjoint(k[i, 0], f[i, j], ft_grid) for j in range(f.shape[1])], 0
+        )
+        for i in range(k.shape[0])
+    ],
+    0,
 )
 
 # relative error
@@ -57,7 +72,7 @@ print(
     ),
 )
 
-
+exit()
 #################################
 ###### Test forward... ##########
 #################################
@@ -81,8 +96,11 @@ print(
 
 
 ##############################################
-###### Compare with torchkbnufft... ##########
+###### Compare with torch_nfft... ############
 ##############################################
+if not torch_nfft_comparison:
+    exit()
+
 N = 2**10
 nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
 

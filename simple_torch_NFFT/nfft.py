@@ -42,8 +42,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # +m and 2*m to prevent overflows around 1/2=-1/2
     inds = (inds.tile(1,1,f.shape[1],1) + n // 2 + m) + (n + 2 * m) * torch.arange(
         0, increments.shape[2], device=device, dtype=torch.long
-    )[None, None, :, None]
-    + (n + 2 * m) * increments.shape[2] * torch.arange(
+    )[None, None, :, None] + (n + 2 * m) * increments.shape[2] * torch.arange(
         0, increments.shape[1], device=device, dtype=torch.long
     )[None, :, None, None]
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
@@ -51,7 +50,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # handle overflows
     g[:, :, -2 * m : -m] += g[:, :, :m]
     g[:, :, m : 2 * m] += g[:, :, -m:]
-    return g[:, m:-m]
+    return g[:, :, m:-m]
 
 
 @torch.compile
@@ -66,7 +65,7 @@ def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
     g = transposed_sparse_convolution(x, f, n, m, phi_conj, device)
     g = torch.fft.ifftshift(g, [-1])
     g_hat = torch.fft.ifft(g, norm="forward")
-    g_hat = torch.fft.fftshift(g_hat, [-1])[:, cut:-cut]
+    g_hat = torch.fft.fftshift(g_hat, [-1])[:, :, cut:-cut]
     f_hat = g_hat / phi_hat
     # f_hat starts with negative indices
     return f_hat
