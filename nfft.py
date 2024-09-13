@@ -7,6 +7,7 @@ import torch
 # - so far only autograd wrt f/f_hat not wrt basis points
 # - oversampled and non-oversampled number of Fourier coefficients should be even
 # - autograd not tested yet 
+# - does not like large cutoff paramters
 #
 # Other comments at functions in the code
 
