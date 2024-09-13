@@ -11,7 +11,6 @@ implemented directly in PyTorch. It runs on a GPU, supports autograd and vectori
 - oversampled and non-oversampled number of Fourier coefficients should be even
 - autograd not tested yet 
 - more efficient with small cutoff parameters...
-- pip install not set up yet
 
 ## Requirements
 
