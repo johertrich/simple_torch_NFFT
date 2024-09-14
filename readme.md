@@ -11,6 +11,7 @@ are computed during initialization of the NFFT object.
 - so far only autograd wrt f/f_hat not wrt basis points
 - autograd not tested yet (probably it contains some typos)
 - more efficient with small cutoff parameters...
+- so far no option to opt out from compiling (which might be convenient when calling many NFFT with different input sizes).
 
 ## Requirements
 
@@ -23,14 +24,15 @@ pip install git+https://github.com/johertrich/simple_torch_NFFT
 
 ## Usage
 
-There exist different conventions to define the Fourier transform and normalizing (N)FFTs.
+There exist different conventions to define the Fourier transform and for normalizing (N)FFTs.
 In order to specify the functionality of the code precisely, we first have to define
-the problem setting. Afterwards, we have a look on the precise implementation
+the problem setting. Afterwards, we have a look on the precise implementation and give an example.
 
 ### Problem Setting: Fourier Transform on Non-equispaced Grids
 
 To fix the conventions and normalizations of the package, we briefly recall the definition of the
-Fourier transform on non-equispaced grids. For convenience, we stick to the 1D case.
+Fourier transform on non-equispaced grids. Here, we only consider the cases "equidistant to non-equidistant" and
+"non-equidistant to equidistant" but not "non-equidistant to non-equidistant". For convenience, we stick to the 1D case.
 The forward problem is given by computing
 
 $$f_j=f(x_j)=\sum_{k=-N/2}^{N/2-1} \hat f_k e^{-2\pi k x_j},\quad j=1,...,M,$$
@@ -45,7 +47,23 @@ a windowing function.
 
 ### Implementation
 
-The NFFT can be called as follows.
+To use the NFFT, we first have to create an NFFT object, which takes as an input the size `N` of the equidistant
+grid resulting in the constructor `nfft = NFFT(N)`. Optional arguments are given in the example below.
+
+The NFFT object provides the forward and adjoint NFFT approximating the forward and adjoint problem from above.
+Here, the forward NFFT takes as argument the points `x` and the function values `f_hat` and returns the result `f` and the
+adjoint NFFT takes the inputs `x` and `f` and returns `f_hat`. Thus, the resulting function calls are `nfft(x,f)` 
+(or equivalently `nfft.forward(x,f_hat)`) and `nfft.adjoint(x,f)`.
+
+All of these tensors have as the first dimension the batch dimension wrt `x`, as a second dimension the batch dimension wrt `f`.
+Consequently, `x` has size `(batch_x,1,M)`, `f_hat` has size `(batch_x,batch_f,N)` (as input broadcastable with size `(1,batch_f,N)`) and `f` has size `(batch_x,batch_f,M)` 
+(as input broadcastable with size `(1,batch_f,M)`). The entries of `f_hat` always start with the negative index `-N/2`, so you want to start with
+zero you have to use `torch.fft.ifftshift`.
+
+Forward and adjoint NFFT will be compiled at the first call.
+
+
+### Example
 
 ```python
 import torch
@@ -71,17 +89,17 @@ M = 20000  # number of basis points
 batch_x = 2  # batches of basis points
 batch_f = 2  # batches of function values
 # basis points, NFFT will be taken wrt the second dimension
-k = (torch.rand((batch_x, 1, M,), device=device,) - 0.5 )
+x = (torch.rand((batch_x, 1, M,), device=device,) - 0.5 )
 
 # forward NFFT
 f_hat = torch.randn(
-    (k.shape[0], batch_f, N), dtype=torch.complex64, device=device
+    (x.shape[0], batch_f, N), dtype=torch.complex64, device=device
 )  # Fourier coefficients
-f = nfft(k, f_hat)
+f = nfft(x, f_hat)
 
 # adjoint NFFT
-f = torch.randn(k.shape, dtype=torch.complex64, device=device)  # function values
-f_hat = nfft.adjoint(k, f)
+f = torch.randn(x.shape, dtype=torch.complex64, device=device)  # function values
+f_hat = nfft.adjoint(x, f)
 
 ```
 
