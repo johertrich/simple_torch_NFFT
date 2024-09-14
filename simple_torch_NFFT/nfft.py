@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 # Very simple but vectorized version of the NFFT
 
@@ -26,38 +27,82 @@ def ndft_forward(x, fHat, fts):
 
 
 def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
-    # x is three-dimensional: batch_x times 1 times #basis points
+    # x is four-dimensional: batch_x times 1 times #basis points times dimension
     # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
     # n is even
     # phi_conj is function handle
-    l = torch.arange(0, 2 * m, device=device, dtype=torch.long).view(2 * m, 1, 1, 1)
-    inds = (torch.ceil(n * x).long() - m)[None] + l
-    increments = phi_conj(x[None] - inds.float() / n) * f[None]
+    window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
+    window = torch.cartesian_prod(
+        *[
+            torch.arange(0, 2 * m, device=device, dtype=torch.long)
+            for _ in range(len(n))
+        ]
+    ).view(window_shape)
+    inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).long() - m)[
+        None
+    ] + window
+    increments = (
+        torch.prod(
+            phi_conj(
+                x[None]
+                - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
+            ),
+            -1,
+        )
+        * f[None]
+    )
+    padded_size = np.prod([n[i] + 2 * m for i in range(len(n))])
     g_linear = torch.zeros(
-        (increments.shape[1] * increments.shape[2] * (n + 2 * m),),
+        (increments.shape[1] * increments.shape[2] * padded_size,),
         device=device,
         dtype=increments.dtype,
     )
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
+    inds = inds + torch.tensor(
+        [n[i] // 2 + m for i in range(len(n))], dtype=torch.long, device=device
+    )
+
+    cumprods = torch.cumprod(
+        torch.flip(torch.tensor(n, dtype=torch.long, device=device), (0,)), 0
+    )[:-1]
+    size_mults = torch.ones(len(n), dtype=torch.long, device=device)
+    size_mults[1:] = cumprods
+    size_mults = torch.flip(size_mults, (0,))
+    # handling dimensions
+    inds = torch.sum(inds * size_mults, -1)
+
+    # handling batch dimensions in linear indexing
     inds = (
-        (inds + n // 2 + m).tile(1, 1, f.shape[1], 1)
-        + (n + 2 * m)
+        inds.tile(1, 1, f.shape[1], 1)
+        + padded_size
         * torch.arange(0, increments.shape[2], device=device, dtype=torch.long)[
             None, None, :, None
         ]
-        + (n + 2 * m)
+        + padded_size
         * increments.shape[2]
         * torch.arange(0, increments.shape[1], device=device, dtype=torch.long)[
             None, :, None, None
         ]
     )
+
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
-    g = g_linear.view(x.shape[0], f.shape[1], n + 2 * m)
+    g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
+    g = g_linear.view(g_shape)
     # handle overflows
-    g[:, :, -2 * m : -m] += g[:, :, :m]
-    g[:, :, m : 2 * m] += g[:, :, -m:]
-    return g[:, :, m:-m]
+    for i in range(len(n)):
+        g.index_add_(
+            i + 2,
+            torch.arange(n[i], n[i] + m, dtype=torch.long, device=device),
+            torch.narrow(g, i + 2, 0, m).clone(),
+        )
+        g.index_add_(
+            i + 2,
+            torch.arange(m, 2 * m, dtype=torch.long, device=device),
+            torch.narrow(g, i + 2, n[i] + m, m).clone(),
+        )
+        g = torch.narrow(g, i + 2, m, n[i])
+    return g
 
 
 @torch.compile
@@ -68,11 +113,19 @@ def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
     # phi_conj is function handle
     # N is even
     # phi_hat starts with negative indices
-    cut = (n - N) // 2
+    cut = [(n[i] - N[i]) // 2 for i in range(len(n))]
     g = transposed_sparse_convolution(x, f, n, m, phi_conj, device)
-    g = torch.fft.ifftshift(g, [-1])
-    g_hat = torch.fft.ifft(g, norm="forward")
-    g_hat = torch.fft.fftshift(g_hat, [-1])[:, :, cut:-cut]
+    lastdims = [-i for i in range(len(n), 0, -1)]
+    g = torch.fft.ifftshift(g, lastdims)
+    if len(n) == 1:
+        g_hat = torch.fft.ifft(g, norm="forward")
+    elif len(n) == 2:
+        g_hat = torch.fft.ifft2(g, norm="forward")
+    else:
+        g_hat = torch.fft.ifftn(g, norm="forward", dim=lastdims)
+    g_hat = torch.fft.fftshift(g_hat, [-i for i in range(len(n), 0, -1)])
+    for i in range(len(n)):
+        g_hat = torch.narrow(g_hat, len(g_hat.shape) - len(n) + i, cut[i], N[i])
     f_hat = g_hat / phi_hat
     # f_hat starts with negative indices
     return f_hat
@@ -259,9 +312,9 @@ class NFFT(torch.nn.Module):
         super().__init__()
         self.N = 2 * (N // 2)  # make N even
         if n is None:
-            self.n = 2 * (int(sigma * N) // 2)  # make n even
+            self.n = 2 * (int(sigma * self.N) // 2)  # make n even
         else:
-            self.n = 2 * (N // 2)  # make n even
+            self.n = 2 * (n // 2)  # make n even
         self.m = m
         self.device = device
         self.float_type = torch.float64 if double_precision else torch.float32
@@ -285,5 +338,12 @@ class NFFT(torch.nn.Module):
 
     def adjoint(self, x, f):
         return AdjointNFFT.apply(
-            x, f, self.N, self.n, self.m, self.window, self.window.ft, self.device
+            x.unsqueeze(-1),
+            f,
+            (self.N,),
+            (self.n,),
+            self.m,
+            self.window,
+            self.window.ft,
+            self.device,
         )
