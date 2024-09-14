@@ -4,7 +4,6 @@ import torch
 
 # Comments:
 # - so far only 1D
-# - so far only batching wrt the basis points
 # - so far only autograd wrt f/f_hat not wrt basis points
 # - oversampled and non-oversampled number of Fourier coefficients should be even
 # - autograd not tested yet

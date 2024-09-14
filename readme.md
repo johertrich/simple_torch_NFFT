@@ -3,7 +3,7 @@
 This repository contains a very simple implementation of the non-equispaced fast Fourier transform (NFFT)
 implemented directly in PyTorch. It runs on a GPU, supports autograd and vectorization.
 In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions
-are computed during initialization of the initialization of the NFFT object.
+are computed during initialization of the NFFT object.
 
 ## Comments towards the State of Implementation
 
