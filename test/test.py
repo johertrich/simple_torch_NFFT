@@ -125,13 +125,15 @@ sync = (
 )
 
 N = 2**10
+f_batches = 10
+x_batches = 10
 nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
 
-J = 20000
+J = 100000
 k = (
     torch.rand(
         (
-            2,
+            x_batches,
             1,
             J,
         ),
@@ -144,7 +146,7 @@ runs = 1
 # k=k[None,:]
 
 # test data
-f = torch.randn([k.shape[0], 2, k.shape[-1]], dtype=complex_type, device=device)
+f = torch.randn([k.shape[0], f_batches, k.shape[-1]], dtype=complex_type, device=device)
 
 batch_size = 1
 
@@ -186,7 +188,7 @@ if torch_nfft_comparison:
     for _ in range(runs):
         fHat_tn = tn.nfft_adjoint(
             f.flatten(), k_tn.flatten()[:, None], bandwidth=N, batch=batch_x, cutoff=m
-        ).view(k_tn.shape[0], f.shape[1], k_tn.shape[2])
+        ).view(k_tn.shape[0], f.shape[1], -1)
         torch.cuda.synchronize()
     toc = time.time() - tic
     print("CUDA native", toc)
@@ -227,7 +229,7 @@ if torch_nfft_comparison:
             k_tn.flatten()[:, None],
             batch=batch_y,
             cutoff=m,
-        )
+        ).view(k_tn.shape[0], fHat.shape[1], -1)
         torch.cuda.synchronize()
     toc = time.time() - tic
     print("CUDA native", toc)
