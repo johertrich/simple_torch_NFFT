@@ -103,6 +103,23 @@ except:
     print("torch_nfft cannot be loaded. Omit time comparison")
     torch_nfft_comparison = False
 
+
+def batched_nfft(nfft_fun, points, inp):
+    torch.cat(
+        [
+            torch.cat(
+                [
+                    nfft_fun(points[i : i + 1], inp[i : i + 1, j : j + 1])
+                    for j in range(inp.shape[1])
+                ],
+                1,
+            )
+            for i in range(points.shape[0])
+        ],
+        0,
+    )
+
+
 sync = (
     (lambda: torch.cuda.synchronize()) if torch.cuda.is_available() else (lambda: None)
 )
@@ -132,34 +149,10 @@ f = torch.randn([k.shape[0], 2, k.shape[-1]], dtype=complex_type, device=device)
 batch_size = 1
 
 # compile
-fHat_stacked = torch.cat(
-    [
-        torch.cat(
-            [
-                nfft.adjoint(k[i : i + 1], f[i : i + 1, j : j + 1])
-                for j in range(f.shape[1])
-            ],
-            1,
-        )
-        for i in range(k.shape[0])
-    ],
-    0,
-)
+fHat_stacked = batched_nfft(nfft.adjoint, k, f)
 fHat = nfft.adjoint(k, f)
 f = nfft(k, fHat)
-f_stacked = torch.cat(
-    [
-        torch.cat(
-            [
-                nfft(k[i : i + 1], fHat[i : i + 1, j : j + 1])
-                for j in range(fHat.shape[1])
-            ],
-            1,
-        )
-        for i in range(k.shape[0])
-    ],
-    0,
-)
+f_stacked = batched_nfft(nfft, k, fHat)
 
 # ground truth via NDFT
 # fHat_dft=ndft_adjoint(k.squeeze(),f.squeeze(),ft_grid)
@@ -169,19 +162,7 @@ print("\n\nAdjoint:\n")
 sync()
 tic = time.time()
 for _ in range(runs):
-    fHat_stacked = torch.cat(
-        [
-            torch.cat(
-                [
-                    nfft.adjoint(k[i : i + 1], f[i : i + 1, j : j + 1])
-                    for j in range(f.shape[1])
-                ],
-                0,
-            )
-            for i in range(k.shape[0])
-        ],
-        0,
-    )
+    fHat_stacked = batched_nfft(nfft.adjoint, k, f)
     sync()
 toc = time.time() - tic
 print("Stacked:", toc)
@@ -196,31 +177,20 @@ toc = time.time() - tic
 print("Simple:", toc)
 
 if torch_nfft_comparison:
-    batch_x = torch.arange(k.shape[0], device=device).repeat_interleave(k.shape[1])
+    k_tn = k.tile(1, f.shape[1], 1)
+    batch_x = torch.arange(
+        k_tn.shape[0] * k_tn.shape[1], device=device
+    ).repeat_interleave(k_tn.shape[2])
     torch.cuda.synchronize()
     tic = time.time()
     for _ in range(runs):
-        fHat_torch_nfft = tn.nfft_adjoint(
-            f.flatten(), k.flatten()[:, None], bandwidth=N, batch=batch_x, cutoff=m
-        )
+        fHat_tn = tn.nfft_adjoint(
+            f.flatten(), k_tn.flatten()[:, None], bandwidth=N, batch=batch_x, cutoff=m
+        ).view(k_tn.shape[0], f.shape[1], k_tn.shape[2])
         torch.cuda.synchronize()
     toc = time.time() - tic
     print("CUDA native", toc)
 
-    batch_x = torch.arange(k.shape[0], device=device).repeat_interleave(k.shape[1])
-    torch.cuda.synchronize()
-    tic = time.time()
-    for _ in range(runs):
-        fHat_torch_nfft = torch.cat(
-            [
-                tn.nfft_adjoint(f[i], k[i : i + 1].T, bandwidth=N, cutoff=m)
-                for i in range(k.shape[0])
-            ],
-            0,
-        )
-        torch.cuda.synchronize()
-    toc = time.time() - tic
-    print("CUDA native stacked", toc)
 
 print("\n\nForward:\n")
 
@@ -230,19 +200,7 @@ fHat = torch.randn((k.shape[0], f.shape[1], N), dtype=complex_type, device=devic
 sync()
 tic = time.time()
 for _ in range(runs):
-    f_stacked = torch.cat(
-        [
-            torch.cat(
-                [
-                    nfft(k[i : i + 1], fHat[i : i + 1, j : j + 1])
-                    for j in range(fHat.shape[1])
-                ],
-                1,
-            )
-            for i in range(k.shape[0])
-        ],
-        0,
-    )
+    f_stacked = batched_nfft(nfft, k, fHat)
     sync()
 toc = time.time() - tic
 print("Stacked:", toc)
@@ -257,28 +215,19 @@ toc = time.time() - tic
 print("Simple:", toc)
 
 if torch_nfft_comparison:
-    batch_y = torch.arange(k.shape[0], device=device).repeat_interleave(k.shape[1])
+    k_tn = k.tile(1, f.shape[1], 1)
+    batch_y = torch.arange(
+        k_tn.shape[0] * k_tn.shape[1], device=device
+    ).repeat_interleave(k_tn.shape[2])
     torch.cuda.synchronize()
     tic = time.time()
     for _ in range(runs):
         f_torch_nfft = tn.nfft_forward(
-            fHat, k.flatten()[:, None], batch=batch_y, cutoff=m
+            fHat.view(-1, fHat.shape[2]),
+            k_tn.flatten()[:, None],
+            batch=batch_y,
+            cutoff=m,
         )
         torch.cuda.synchronize()
     toc = time.time() - tic
     print("CUDA native", toc)
-
-    batch_y = torch.arange(k.shape[0], device=device).repeat_interleave(k.shape[1])
-    torch.cuda.synchronize()
-    tic = time.time()
-    for _ in range(runs):
-        f_torch_nfft = torch.cat(
-            [
-                tn.nfft_forward(fHat[i : i + 1], k[i : i + 1].T, cutoff=m)
-                for i in range(k.shape[0])
-            ],
-            0,
-        )
-        torch.cuda.synchronize()
-    toc = time.time() - tic
-    print("CUDA native stacked", toc)
