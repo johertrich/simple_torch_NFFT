@@ -23,6 +23,28 @@ pip install git+https://github.com/johertrich/simple_torch_NFFT
 
 ## Usage
 
+There exist different conventions to define the Fourier transform and normalizing (N)FFTs.
+In order to specify the functionality of the code precisely, we first have to define
+the problem setting. Afterwards, we have a look on the precise implementation
+
+### Problem Setting: Fourier Transform on Non-equispaced Grids
+
+To fix the conventions and normalizations of the package, we briefly recall the definition of the
+Fourier transform on non-equispaced grids. For convenience, we stick to the 1D case.
+The forward problem is given by computing
+$$
+f_j=f(x_j)=\sum_{k=-N/2}^{N/2-1} \hat f_k e^{-2\pi k x_j},\quad j=1,...,M,
+$$
+where $x_1,...,x_M\in[-\frac{1}{2},\frac{1}{2})$.
+The mapping $\hat f \mapsto f$ is linear and admits the adjoint operator
+$$
+\hat f_k=\sum_{j=1}^{M} f_j e^{2\pi k x_j},\quad k=-N/2,...,N/2-1.
+$$
+The NFFT, as implemented in this package, approximates these two problems by using an interpolation with
+a windowing function.
+
+### Implementation
+
 The NFFT can be called as follows.
 
 ```python
