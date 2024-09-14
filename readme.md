@@ -9,7 +9,6 @@ are computed during initialization of the NFFT object.
 
 - so far only in 1D
 - so far only autograd wrt f/f_hat not wrt basis points
-- oversampled and non-oversampled number of Fourier coefficients should be even
 - autograd not tested yet (probably it contains some typos)
 - more efficient with small cutoff parameters...
 
@@ -34,12 +33,13 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Parameters of the NFFT
 N = 2**10  # number of Fourier coefficients
-m = 4  # window size
-sigma = 2  # oversampling ratio
 
 # create NFFT object
-nfft = NFFT(N, m, sigma)
+nfft = NFFT(N)
 # optional arguments are
+# m (window size, default 4)
+# n (oversampled number of Fourier coefficients, None for using oversampling factor, default: None)
+# sigma (oversampling factor, default 2, not used if n is given)
 # window (default simple_torch_NFFT.KaiserBesselWindow, other option simple_torch_NFFT.GaussWindow)
 # device (default "cuda" if torch.cuda.is_available() else "cpu")
 # double_precision (default false)

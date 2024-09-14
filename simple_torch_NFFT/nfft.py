@@ -5,7 +5,6 @@ import torch
 # Comments:
 # - so far only 1D
 # - so far only autograd wrt f/f_hat not wrt basis points
-# - oversampled and non-oversampled number of Fourier coefficients should be even
 # - autograd not tested yet
 # - does not like large cutoff paramters
 #
@@ -246,18 +245,23 @@ class NFFT(torch.nn.Module):
     def __init__(
         self,
         N,
-        m,
-        sigma,
+        m=4,
+        n=None,
+        sigma=2.0,
         window=None,
         device="cuda" if torch.cuda.is_available() else "cpu",
         double_precision=False,
     ):
         # N: number of not-oversampled Fourier coefficients
+        # n: oversampled number of Fourier coefficients
         # sigma: oversampling
         # m: Window size
         super().__init__()
-        self.N = N
-        self.n = int(sigma * N)
+        self.N = 2 * (N // 2)  # make N even
+        if n is None:
+            self.n = 2 * (int(sigma * N) // 2)  # make n even
+        else:
+            self.n = 2 * (N // 2)  # make n even
         self.m = m
         self.device = device
         self.float_type = torch.float64 if double_precision else torch.float32
