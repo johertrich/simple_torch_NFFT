@@ -31,7 +31,7 @@ n = 2 * N
 ft_grid = torch.arange(-N // 2, N // 2, dtype=float_type, device=device)
 
 # init nfft
-nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
+nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
 
 #################################
 ###### Test adjoint... ##########
@@ -127,7 +127,7 @@ sync = (
 N = 2**10
 f_batches = 10
 x_batches = 10
-nfft = NFFT(N, m, sigma, device=device, double_precision=double_precision)
+nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
 
 J = 100000
 k = (
