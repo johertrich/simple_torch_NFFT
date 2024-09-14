@@ -21,14 +21,14 @@ M = 20000  # number of basis points
 batch_x = 2  # batches of basis points
 batch_f = 2  # batches of function values
 # basis points, NFFT will be taken wrt the second dimension
-k = (torch.rand((batch_x, 1, M,), device=device,) - 0.5 )
+x = (torch.rand((batch_x, 1, M,), device=device,) - 0.5 )
 
 # forward NFFT
 f_hat = torch.randn(
-    (k.shape[0], batch_f, N), dtype=torch.complex64, device=device
+    (x.shape[0], batch_f, N), dtype=torch.complex64, device=device
 )  # Fourier coefficients
-f = nfft(k, f_hat)
+f = nfft(x, f_hat)
 
 # adjoint NFFT
-f = torch.randn(k.shape, dtype=torch.complex64, device=device)  # function values
-f_hat = nfft.adjoint(k, f)
+f = torch.randn(x.shape, dtype=torch.complex64, device=device)  # function values
+f_hat = nfft.adjoint(x, f)
