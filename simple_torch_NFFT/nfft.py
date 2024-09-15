@@ -1,5 +1,12 @@
 import torch
 import numpy as np
+import warnings
+import sys
+
+if torch.__version__ < "2.4.0" and sys.version >= "3.12":
+    warnings.warn(
+        "You are using a PyTorch version older than 2.4.0! Until PyTorch 2.3 (and older) torch.compile does not work with Python 3.12 (and newer). Consider to update PyTorch to 2.4 to get the best performance."
+    )
 
 # Very simple but vectorized version of the NFFT
 

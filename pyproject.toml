@@ -9,6 +9,6 @@ description = "Very simple but vectorized torch implementation of the NFFT"
 authors = [{ name = "Johannes Hertrich", email = "j.hertrich@ucl.ac.uk" }]
 license = { text = "MIT" }
 readme = "readme.md"
-requires-python = ">=3.12"
-dependencies = ["torch>=2.4.0"]
+requires-python = ">=3.9"
+dependencies = ["torch"]
 
