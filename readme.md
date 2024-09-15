@@ -10,7 +10,8 @@ are computed during initialization of the NFFT object.
 - so far only autograd wrt f/f_hat not wrt basis points
 - autograd not working yet
 - more efficient with small cutoff parameters...
-- so far no option to opt out from compiling (which might be convenient when calling many NFFT with different input sizes).
+- GaussWindow not working at the moment
+- There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
 
 ## Requirements
 
@@ -55,7 +56,7 @@ adjoint NFFT takes the inputs `x` and `f` and returns `f_hat`. Thus, the resulti
 (or equivalently `nfft.forward(x,f_hat)`) and `nfft.adjoint(x,f)`.
 
 All of these tensors have as the first dimension the batch dimension wrt `x`, as a second dimension the batch dimension wrt `f`.
-Consequently, `x` has size `(batch_x,1,M)`, `f_hat` has size `(batch_x,batch_f,N)` (as input broadcastable with size `(1,batch_f,N)`) and `f` has size `(batch_x,batch_f,M)` 
+Consequently, `x` has size `(batch_x,1,M)`, `f_hat` has size `(batch_x,batch_f,N_1,...,N_d)` (as input broadcastable with size `(1,batch_f,N_1,...,N_d)`) and `f` has size `(batch_x,batch_f,M)` 
 (as input broadcastable with size `(1,batch_f,M)`). The entries of `f_hat` always start with the negative index `-N/2`, so you want to start with
 zero you have to use `torch.fft.ifftshift`.
 
@@ -88,7 +89,7 @@ nfft = NFFT(N)
 M = 20000  # number of basis points
 batch_x = 2  # batches of basis points
 batch_f = 2  # batches of function values
-# basis points, NFFT will be taken wrt the second dimension
+# basis points, NFFT will be taken wrt the last dimension
 x = (torch.rand((batch_x, 1, M, len(N),), device=device,) - 0.5 )
 
 # forward NFFT

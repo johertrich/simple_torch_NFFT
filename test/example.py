@@ -21,7 +21,7 @@ nfft = NFFT(N)
 M = 20000  # number of basis points
 batch_x = 2  # batches of basis points
 batch_f = 2  # batches of function values
-# basis points, NFFT will be taken wrt the second dimension
+# basis points, NFFT will be taken wrt the last dimension
 x = (torch.rand((batch_x, 1, M, len(N),), device=device,) - 0.5 )
 
 # forward NFFT
