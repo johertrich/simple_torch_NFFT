@@ -3,10 +3,13 @@ import numpy as np
 import warnings
 import sys
 
+never_compile=False
+
 if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     warnings.warn(
-        "You are using a PyTorch version older than 2.4.0! Until PyTorch 2.3 (and older) torch.compile does not work with Python 3.12 (and newer). Consider to update PyTorch to 2.4 to get the best performance."
+        "You are using a PyTorch version older than 2.4.0! In PyTorch 2.3 (and older) torch.compile does not work with Python 3.12+. Consider to update PyTorch to 2.4 to get the best performance."
     )
+    never_compile=True
 
 # Very simple but vectorized version of the NFFT
 
@@ -445,7 +448,9 @@ class NFFT(torch.nn.Module):
                 device=device,
                 float_type=self.float_type,
             )
-        if no_compile:
+        if no_compile or never_compile:
+            if never_compile:
+                warnings.warn("Compile is deactivated since the PyTorch version is too old. Consider to update PyTorch to 2.4 or newer.")
             self.forward_fun = ForwardNFFT.apply
             self.adjoint_fun = AdjointNFFT.apply
         else:
