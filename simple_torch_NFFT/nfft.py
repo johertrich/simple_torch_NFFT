@@ -3,13 +3,13 @@ import numpy as np
 import warnings
 import sys
 
-never_compile=False
+never_compile = False
 
 if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     warnings.warn(
         "You are using a PyTorch version older than 2.4.0! In PyTorch 2.3 (and older) torch.compile does not work with Python 3.12+. Consider to update PyTorch to 2.4 to get the best performance."
     )
-    never_compile=True
+    never_compile = True
 
 # Very simple but vectorized version of the NFFT
 
@@ -285,26 +285,45 @@ class ForwardNFFT(torch.autograd.Function):
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        x, _, N, n, m, phi, phi_hat, device = inputs
+        x, f_hat, N, n, m, phi, phi_hat, device = inputs
         ctx.N = N
         ctx.n = n
         ctx.m = m
         ctx.phi = phi
         ctx.phi_hat = phi_hat
         ctx.device = device
-        ctx.save_for_backward(x)
+        ctx.save_for_backward(x, f_hat)
 
     @staticmethod
     def backward(ctx, grad_output):
-        (x,) = ctx.saved_tensors
+        (x, f_hat) = ctx.saved_tensors
 
         if ctx.needs_input_grad[1]:
-            # call adjoint_nfft in the backward pass
+            # grad wrt forward is backward
             # assume that phi is real-valued (otherwise we would need a conjugate around the phi here)
             grad_f_hat = adjoint_nfft(
                 x, grad_output, ctx.N, ctx.n, ctx.m, ctx.phi, ctx.phi_hat, ctx.device
             )
-
+        """ not working so far
+        if ctx.needs_input_grad[0]:
+            # grad wrt x is again a forward NFFT
+            inds = torch.cartesian_prod(
+            *[
+                torch.arange(
+                    -ctx.N[i] // 2, ctx.N[i] // 2, dtype=float_type, device=device
+                )
+                for i in range(len(self.N))
+            ]
+            ).reshape(list(ctx.N) + [-1])
+            perm=[len(ctx.N)-1]+list(range(len(ctx.N)-1))
+            inds=inds.permute(perm)
+            if f_hat.shape[0]<x.shape[0]:
+                f_hat=f_hat.tile(x.shape[0],...)
+            f_hat=-2j*torch.pi*f_hat.unsqueeze(2)*inds
+            x=x.tile((len(N),...)
+            f_hat=f_hat.view(x.shape)
+            grad_x=
+        """
         return None, grad_f_hat, None, None, None, None, None, None
 
 
@@ -404,6 +423,7 @@ class NFFT(torch.nn.Module):
         device="cuda" if torch.cuda.is_available() else "cpu",
         double_precision=False,
         no_compile=False,
+        grad_via_adjoint=True,
     ):
         # N: number of not-oversampled Fourier coefficients
         # n: oversampled number of Fourier coefficients
@@ -450,12 +470,22 @@ class NFFT(torch.nn.Module):
             )
         if no_compile or never_compile:
             if never_compile:
-                warnings.warn("Compile is deactivated since the PyTorch version is too old. Consider to update PyTorch to 2.4 or newer.")
-            self.forward_fun = ForwardNFFT.apply
-            self.adjoint_fun = AdjointNFFT.apply
+                warnings.warn(
+                    "Compile is deactivated since the PyTorch version is too old. Consider to update PyTorch to 2.4 or newer."
+                )
+            if grad_via_adjoint:
+                self.forward_fun = ForwardNFFT.apply
+                self.adjoint_fun = AdjointNFFT.apply
+            else:
+                self.forward_fun = forward_nfft
+                self.adjoint_fun = adjoint_nfft
         else:
-            self.forward_fun = torch.compile(ForwardNFFT.apply)
-            self.adjoint_fun = torch.compile(AdjointNFFT.apply)
+            if grad_via_adjoint:
+                self.forward_fun = torch.compile(ForwardNFFT.apply)
+                self.adjoint_fun = torch.compile(AdjointNFFT.apply)
+            else:
+                self.forward_fun = torch.compile(forward_nfft)
+                self.adjoint_fun = torch.compile(adjoint_nfft)
 
     def forward(self, x, f_hat):
         return self.forward_fun(

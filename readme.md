@@ -1,14 +1,10 @@
-# Very simple but vectorized torch implementation of the NFFT
+# Simple PyTorch Implementation of the NFFT
 
 This repository contains a very simple implementation of the non-equispaced fast Fourier transform (NFFT)
-implemented directly in PyTorch for arbitrary dimensions. It runs on a GPU, supports autograd and batching.
-In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions
-are computed during initialization of the NFFT object.
+implemented directly in PyTorch for arbitrary dimensions. It runs on a GPU, supports autograd (wrt both, function values and basis points)
+and allows batching.
 
-## Comments towards the State of Implementation
 
-- so far only autograd wrt f/f_hat not wrt basis points
-- There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
 
 ## Requirements
 
@@ -99,6 +95,17 @@ f = torch.randn((batch_x, batch_f, M), dtype=torch.complex64, device=device)  # 
 f_hat = nfft.adjoint(x, f)
 
 ```
+
+## Performance Comments
+
+- Compared to other libraries the run time might be a little bit more sensitive towards the window size `m`.
+- In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions are computed during initialization of the NFFT object. This might be a disadvantage if one often computes the NFFT with the same basis points.
+
+## Issues that I am Aware of
+
+- so far only autograd wrt f/f_hat not wrt basis points (for grad wrt basis points set `grad_via_adjoint=False`, but this is much slower)
+- There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
+
 
 ## Author
 
