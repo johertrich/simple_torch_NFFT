@@ -335,16 +335,24 @@ class GaussWindow(torch.nn.Module):
         # m: Window size
         # sigma: oversampling
         super().__init__()
-        self.n = n
+        self.n = torch.tensor(n, dtype=float_type, device=device)
         self.N = N
         self.m = m
-        self.sigma = sigma
-        inds = torch.arange(-self.N // 2, self.N // 2, dtype=float_type, device=device)
-        self.ft = self.Fourier_coefficients(inds)
+        self.sigma = torch.tensor(sigma, dtype=float_type, device=device)
+        inds = torch.cartesian_prod(
+            *[
+                torch.arange(
+                    -self.N[i] // 2, self.N[i] // 2, dtype=float_type, device=device
+                )
+                for i in range(len(self.N))
+            ]
+        ).reshape(list(self.N) + [-1])
+        self.ft = torch.prod(self.Fourier_coefficients(inds), -1)
 
     def forward(self, k):
         b = self.m / torch.pi
-        return 1 / (torch.pi * b) ** (0.5) * torch.exp(-((self.n * k) ** 2) / b)
+        out = 1 / (torch.pi * b) ** (0.5) * torch.exp(-((self.n * k) ** 2) / b)
+        return torch.prod(out, -1)
 
     def Fourier_coefficients(self, inds):
         b = self.m / torch.pi
@@ -398,7 +406,14 @@ class NFFT(torch.nn.Module):
                 float_type=self.float_type,
             )
         else:
-            self.window = window
+            self.window = window(
+                self.n,
+                self.N,
+                self.m,
+                tuple([self.n[i] / self.N[i] for i in range(len(self.N))]),
+                device=device,
+                float_type=self.float_type,
+            )
         if no_compile:
             self.forward_fun = forward_nfft
             self.adjoint_fun = adjoint_nfft

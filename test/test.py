@@ -1,4 +1,4 @@
-from simple_torch_NFFT import NFFT
+from simple_torch_NFFT import NFFT, GaussWindow
 from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
 import torch
 import time

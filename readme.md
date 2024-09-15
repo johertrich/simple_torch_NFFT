@@ -10,7 +10,6 @@ are computed during initialization of the NFFT object.
 - so far only autograd wrt f/f_hat not wrt basis points
 - autograd not working yet
 - more efficient with small cutoff parameters...
-- GaussWindow not working at the moment
 - There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
 
 ## Requirements
