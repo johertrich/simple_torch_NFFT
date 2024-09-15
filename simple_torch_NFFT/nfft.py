@@ -3,6 +3,7 @@ import numpy as np
 
 # Very simple but vectorized version of the NFFT
 
+
 def ndft_adjoint_1d(x, f, fts):
     # not vectorized adjoint NDFT for test purposes
     fourier_tensor = torch.exp(2j * torch.pi * fts[:, None] * x[None, :])
@@ -12,18 +13,34 @@ def ndft_adjoint_1d(x, f, fts):
 
 def ndft_adjoint(x, f, N):
     # not vectorized adjoint NDFT for test purposes
-    inds=torch.cartesian_prod(*[torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device) for i in range(len(N))]).view(-1,len(N))
-    fourier_tensor=torch.exp(2j*torch.pi * torch.sum(inds[:,None,:] * x[None,:,:],-1))
-    y=torch.matmul(fourier_tensor,f.view(-1,1))
+    inds = torch.cartesian_prod(
+        *[
+            torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device)
+            for i in range(len(N))
+        ]
+    ).view(-1, len(N))
+    fourier_tensor = torch.exp(
+        2j * torch.pi * torch.sum(inds[:, None, :] * x[None, :, :], -1)
+    )
+    y = torch.matmul(fourier_tensor, f.view(-1, 1))
     return y.view(N)
 
+
 def ndft_forward(x, fHat):
-    N=fHat.shape
+    N = fHat.shape
     # not vectorized adjoint NDFT for test purposes
-    inds=torch.cartesian_prod(*[torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device) for i in range(len(N))]).view(-1,len(N))
-    fourier_tensor=torch.exp(-2j*torch.pi * torch.sum(inds[None,:,:] * x[:,None,:],-1))
-    y=torch.matmul(fourier_tensor,fHat.view(-1,1))
+    inds = torch.cartesian_prod(
+        *[
+            torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device)
+            for i in range(len(N))
+        ]
+    ).view(-1, len(N))
+    fourier_tensor = torch.exp(
+        -2j * torch.pi * torch.sum(inds[None, :, :] * x[:, None, :], -1)
+    )
+    y = torch.matmul(fourier_tensor, fHat.view(-1, 1))
     return y.view(x.shape[0])
+
 
 def ndft_forward_1d(x, fHat, fts):
     # not vectorized forward NDFT for test purposes
@@ -48,18 +65,17 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
         None
     ] + window
     increments = (
-            phi_conj(
-                x[None]
-                - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
-            )
-         * f[None]
+        phi_conj(
+            x[None] - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
+        )
+        * f[None]
     )
 
     cumprods = torch.cumprod(
-        torch.flip(torch.tensor(n, dtype=torch.long, device=device) + 2*m, (0,)), 0
+        torch.flip(torch.tensor(n, dtype=torch.long, device=device) + 2 * m, (0,)), 0
     )
-    padded_size=cumprods[-1]
-    cumprods=cumprods[:-1]
+    padded_size = cumprods[-1]
+    cumprods = cumprods[:-1]
     size_mults = torch.ones(len(n), dtype=torch.long, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
@@ -74,7 +90,6 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     inds = inds + torch.tensor(
         [n[i] // 2 + m for i in range(len(n))], dtype=torch.long, device=device
     )
-
 
     # handling dimensions
     inds = torch.sum(inds * size_mults, -1)
@@ -112,7 +127,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     return g
 
 
-#@torch.compile
+# @torch.compile
 def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
     # x is two-dimensional: batch_dim times basis points
     # f has same size as x or is broadcastable
@@ -154,19 +169,18 @@ def sparse_convolution(x, g, n, m, M, phi, device):
         None
     ] + window
     increments = phi(
-                x[None]
-                - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
-            )
+        x[None] - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
+    )
     # % n to prevent overflows
     for i in range(len(n)):
-        inds[...,i]=(inds[...,i]+n[i]//2)%n[i]
-    inds=inds.tile(1,1,g.shape[1],1,1)
+        inds[..., i] = (inds[..., i] + n[i] // 2) % n[i]
+    inds = inds.tile(1, 1, g.shape[1], 1, 1)
 
     cumprods = torch.cumprod(
         torch.flip(torch.tensor(n, dtype=torch.long, device=device), (0,)), 0
     )
-    nonpadded_size=cumprods[-1]
-    cumprods=cumprods[:-1]
+    nonpadded_size = cumprods[-1]
+    cumprods = cumprods[:-1]
     size_mults = torch.ones(len(n), dtype=torch.long, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
@@ -191,7 +205,7 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     return f
 
 
-#@torch.compile
+# @torch.compile
 def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     # x is three-dimensional: batch_x times 1 times #basis points
     # f_hat has size (batch_x,batch_f,N)
@@ -202,19 +216,19 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     # f_hat fängt mit negativen indizes an
     g_hat = f_hat / phi_hat
     for i in range(len(n)):
-        g_hat_shape=list(g_hat.shape)
-        g_hat_shape[i+2]=(n[i]-N[i])//2
+        g_hat_shape = list(g_hat.shape)
+        g_hat_shape[i + 2] = (n[i] - N[i]) // 2
         pad = torch.zeros(g_hat_shape, device=device)
-        g_hat = torch.cat((pad, g_hat, pad), i+2)
+        g_hat = torch.cat((pad, g_hat, pad), i + 2)
     lastdims = [-i for i in range(len(n), 0, -1)]
-    g_hat=torch.fft.fftshift(g_hat, lastdims)
+    g_hat = torch.fft.fftshift(g_hat, lastdims)
     if len(n) == 1:
         g = torch.fft.fft(g_hat, norm="backward")
     elif len(n) == 2:
         g = torch.fft.fft2(g_hat, norm="backward")
     else:
         g = torch.fft.fftn(g_hat, norm="backward", dim=lastdims)
-    g=torch.fft.ifftshift(g,  lastdims)  # shift such that g lives again on [-1/2,1/2)
+    g = torch.fft.ifftshift(g, lastdims)  # shift such that g lives again on [-1/2,1/2)
     f = sparse_convolution(x, g, n, m, x.shape[2], phi, device)
     # f has same size as x
     return f
@@ -281,12 +295,19 @@ class KaiserBesselWindow(torch.nn.Module):
         # sigma: oversampling
         # method adapted from NFFT.jl
         super().__init__()
-        self.n = torch.tensor(n,dtype=float_type,device=device)
+        self.n = torch.tensor(n, dtype=float_type, device=device)
         self.N = N
         self.m = m
-        self.sigma = torch.tensor(sigma,dtype=float_type,device=device)
-        inds = torch.cartesian_prod(*[torch.arange(-self.N[i] // 2, self.N[i] // 2, dtype=float_type, device=device) for i in range(len(self.N))]).reshape(list(self.N)+[-1])
-        self.ft = torch.prod(self.Fourier_coefficients(inds),-1)
+        self.sigma = torch.tensor(sigma, dtype=float_type, device=device)
+        inds = torch.cartesian_prod(
+            *[
+                torch.arange(
+                    -self.N[i] // 2, self.N[i] // 2, dtype=float_type, device=device
+                )
+                for i in range(len(self.N))
+            ]
+        ).reshape(list(self.N) + [-1])
+        self.ft = torch.prod(self.Fourier_coefficients(inds), -1)
 
     def forward(self, k):  # no check that abs(k)<m/n !
         b = (2 - 1 / self.sigma) * torch.pi
@@ -295,7 +316,7 @@ class KaiserBesselWindow(torch.nn.Module):
         out = torch.nan_to_num(
             out, nan=0.0
         )  # outside the range out has nan values... replace them by zero
-        return torch.prod(out,-1)
+        return torch.prod(out, -1)
 
     def Fourier_coefficients(self, inds):
         b = (2 - 1 / self.sigma) * torch.pi
@@ -351,14 +372,16 @@ class NFFT(torch.nn.Module):
         # sigma: oversampling
         # m: Window size
         super().__init__()
-        if isinstance(N,int):
+        if isinstance(N, int):
             self.N = (2 * (N // 2),)  # make N even
         else:
             self.N = tuple([2 * (N[i] // 2) for i in range(len(N))])
         if n is None:
-            self.n = tuple([2 * (int(sigma * self.N[i]) // 2) for i in range(len(self.N))])  # make n even
+            self.n = tuple(
+                [2 * (int(sigma * self.N[i]) // 2) for i in range(len(self.N))]
+            )  # make n even
         else:
-            if isinstance(n,int):
+            if isinstance(n, int):
                 self.n = (2 * (n // 2),)  # make n even
             else:
                 self.n = tuple([2 * (n[i] // 2) for i in range(len(n))])
