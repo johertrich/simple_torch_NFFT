@@ -11,12 +11,21 @@ def ndft_adjoint_1d(x, f, fts):
 
 
 def ndft_adjoint(x, f, N):
+    # not vectorized adjoint NDFT for test purposes
     inds=torch.cartesian_prod(*[torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device) for i in range(len(N))]).view(-1,len(N))
     fourier_tensor=torch.exp(2j*torch.pi * torch.sum(inds[:,None,:] * x[None,:,:],-1))
     y=torch.matmul(fourier_tensor,f.view(-1,1))
     return y.view(N)
 
-def ndft_forward(x, fHat, fts):
+def ndft_forward(x, fHat):
+    N=fHat.shape
+    # not vectorized adjoint NDFT for test purposes
+    inds=torch.cartesian_prod(*[torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device) for i in range(len(N))]).view(-1,len(N))
+    fourier_tensor=torch.exp(-2j*torch.pi * torch.sum(inds[None,:,:] * x[:,None,:],-1))
+    y=torch.matmul(fourier_tensor,fHat.view(-1,1))
+    return y.view(x.shape[0])
+
+def ndft_forward_1d(x, fHat, fts):
     # not vectorized forward NDFT for test purposes
     fourier_tensor = torch.exp(-2j * torch.pi * fts[None, :] * x[:, None])
     y = torch.matmul(fourier_tensor, fHat[:, None])
@@ -182,7 +191,7 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     return f
 
 
-@torch.compile
+#@torch.compile
 def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     # x is three-dimensional: batch_x times 1 times #basis points
     # f_hat has size (batch_x,batch_f,N)
