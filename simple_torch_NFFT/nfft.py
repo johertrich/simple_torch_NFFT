@@ -3,12 +3,18 @@ import numpy as np
 
 # Very simple but vectorized version of the NFFT
 
-def ndft_adjoint(x, f, fts):
+def ndft_adjoint_1d(x, f, fts):
     # not vectorized adjoint NDFT for test purposes
     fourier_tensor = torch.exp(2j * torch.pi * fts[:, None] * x[None, :])
     y = torch.matmul(fourier_tensor, f[:, None])
     return y.squeeze()
 
+
+def ndft_adjoint(x, f, N):
+    inds=torch.cartesian_prod(*[torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device) for i in range(len(N))]).view(-1,len(N))
+    fourier_tensor=torch.exp(2j*torch.pi * torch.sum(inds[:,None,:] * x[None,:,:],-1))
+    y=torch.matmul(fourier_tensor,f.view(-1,1))
+    return y.view(N)
 
 def ndft_forward(x, fHat, fts):
     # not vectorized forward NDFT for test purposes
@@ -33,14 +39,11 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
         None
     ] + window
     increments = (
-        torch.prod(
             phi_conj(
                 x[None]
                 - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
-            ),
-            -1,
-        )
-        * f[None]
+            )
+         * f[None]
     )
 
     cumprods = torch.cumprod(
@@ -100,7 +103,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     return g
 
 
-@torch.compile
+#@torch.compile
 def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
     # x is two-dimensional: batch_dim times basis points
     # f has same size as x or is broadcastable
@@ -141,13 +144,10 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).long() - m)[
         None
     ] + window
-    increments =  torch.prod(
-            phi(
+    increments = phi(
                 x[None]
                 - inds.to(x.dtype) / torch.tensor(n, dtype=x.dtype, device=device)
-            ),
-            -1,
-        )
+            )
     # % n to prevent overflows
     for i in range(len(n)):
         inds[...,i]=(inds[...,i]+n[i]//2)%n[i]
@@ -272,25 +272,21 @@ class KaiserBesselWindow(torch.nn.Module):
         # sigma: oversampling
         # method adapted from NFFT.jl
         super().__init__()
-        n=n[0]
-        N=N[0]
-        sigma=sigma[0]
-        self.n = n
+        self.n = torch.tensor(n,dtype=float_type,device=device)
         self.N = N
         self.m = m
-        self.sigma = sigma
-        inds = torch.arange(-self.N // 2, self.N // 2, dtype=float_type, device=device)
-        self.ft = self.Fourier_coefficients(inds)
+        self.sigma = torch.tensor(sigma,dtype=float_type,device=device)
+        inds = torch.cartesian_prod(*[torch.arange(-self.N[i] // 2, self.N[i] // 2, dtype=float_type, device=device) for i in range(len(self.N))]).reshape(list(self.N)+[-1])
+        self.ft = torch.prod(self.Fourier_coefficients(inds),-1)
 
     def forward(self, k):  # no check that abs(k)<m/n !
         b = (2 - 1 / self.sigma) * torch.pi
-        out = b / torch.pi * torch.ones_like(k)
         arg = torch.sqrt(self.m**2 - self.n**2 * k**2)
         out = torch.sinh(b * arg) / (arg * torch.pi)
         out = torch.nan_to_num(
             out, nan=0.0
         )  # outside the range out has nan values... replace them by zero
-        return out
+        return torch.prod(out,-1)
 
     def Fourier_coefficients(self, inds):
         b = (2 - 1 / self.sigma) * torch.pi

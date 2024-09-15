@@ -25,7 +25,6 @@ k = (
 m = 4
 sigma = 2
 
-n = 2 * N
 
 # for NDFT comparison
 ft_grid = torch.arange(-N // 2, N // 2, dtype=float_type, device=device)
