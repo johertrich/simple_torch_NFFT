@@ -10,6 +10,7 @@ try:
 except:
     print("torch_nfft cannot be loaded. Omit time comparison")
     torch_nfft_comparison = False
+#torch_nfft_comparison = False
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
@@ -45,8 +46,9 @@ def torch_nfft(x, fHat):
     batch = torch.arange(x.shape[0] * x.shape[1], device=device).repeat_interleave(
         x.shape[2]
     )
+    fHat_shape=[-1]+list(fHat.shape[2:])
     return tn.nfft_forward(
-        fHat.view(-1, fHat.shape[2]),
+        fHat.view(fHat_shape),
         x.view(-1, x.shape[-1]),
         batch=batch,
         cutoff=m,
@@ -60,7 +62,7 @@ def torch_nfft_adjoint(x, f, N):
     )
     out_shape = [x.shape[0], f.shape[1]] + list(N)
     return tn.nfft_adjoint(
-        f.flatten(), x.view(-1, x.shape[-1]), bandwidth=N, batch=batch, cutoff=m
+        f.flatten(), x.view(-1, x.shape[-1]), bandwidth=N[0], batch=batch, cutoff=m
     ).view(out_shape)
 
 
@@ -116,9 +118,9 @@ def test(N, J, batch_x, batch_f, runs=1):
         print("torch_nfft package forward:", toc)
 
 
-N = (2**6, 2**6)
-batch_x = 2
-batch_f = 2
+N = (2**8,2**8)
+batch_x = 1
+batch_f = 1
 J = 100000
 runs = 1
 
