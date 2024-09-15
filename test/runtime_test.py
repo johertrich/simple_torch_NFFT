@@ -29,7 +29,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
 float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
-m = 4
+m = 8
 sigma = 2
 
 # for gpu testing
@@ -80,11 +80,28 @@ def torch_nfft_adjoint(x, f, N):
 
 
 def nfft3_forward(plan, x, fhat):
-    plan.fhat = fhat
-    plan.x = x
-    plan.trafo()
-    return plan.f
+    outs=[]
+    for i in range(x.shape[0]):
+        plan.x = x[i]
+        outs_f=[]
+        for j in range(fhat.shape[1]):
+            plan.fhat = fhat[i,j]
+            plan.trafo()
+            outs_f.append(plan.f)
+        outs.append(np.stack(outs_f,0))
+    return np.stack(outs,0)
 
+def nfft3_adjoint(plan, x, f):
+    outs=[]
+    for i in range(x.shape[0]):
+        plan.x = x[0]
+        outs_f=[]
+        for j in range(f.shape[1]):
+            plan.f=f[i,j]
+            plan.adjoint()
+            outs_f.append(plan.fhat)
+        outs.append(np.stack(outs_f,0))
+    return np.stack(outs,0)
 
 def run_test(method, runs):
     sync()
@@ -106,18 +123,19 @@ def test(N, J, batch_x, batch_f, runs=1):
         - 0.5
     )
     x_cpu = x.detach().cpu().numpy().astype(np.float64)
-    x_cpu = np.ascontiguousarray(x_cpu.squeeze())
+    x_cpu = np.ascontiguousarray(x_cpu.reshape(batch_x,J,len(N)))
 
     # init nfft
     nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
     if nfft3_comparison:
-        plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), J)
+        plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), J, m=m)
 
     f = torch.randn((batch_x, batch_f, J), dtype=complex_type, device=device)
     fHat_shape = [batch_x, batch_f] + list(N)
     fHat = torch.randn(fHat_shape, dtype=complex_type, device=device)
     # for pyNFFT3
-    fHat_cpu = fHat.detach().cpu().numpy().astype(np.complex128).squeeze().reshape(-1)
+    fHat_cpu = fHat.detach().cpu().numpy().astype(np.complex128).squeeze().reshape(batch_x,batch_f,-1)
+    f_cpu = f.detach().cpu().numpy().astype(np.complex128).squeeze().reshape(batch_x,batch_f,-1)
 
     # compile
     nfft(x, fHat)
@@ -141,15 +159,17 @@ def test(N, J, batch_x, batch_f, runs=1):
     print("Simple adjoint:", toc)
     _, toc = run_test(lambda: batched_nfft(nfft.adjoint, x, f), runs)
     print("Batched adjoint:", toc)
+    _, toc = run_test(lambda: nfft3_adjoint(plan, x_cpu, f_cpu), runs)
+    print("NFFT3 adjoint:", toc)
     if torch_nfft_comparison:
         _, toc = run_test(lambda: torch_nfft_adjoint(x, f, N), runs)
         print("torch_nfft package forward:", toc)
 
 
-N = (2**5, 2**5, 2**5)
+N = (2**6,2**6)
 batch_x = 1
 batch_f = 1
 J = 100000
 runs = 1
 
-test(N, J, batch_x, batch_f)
+test(N, J, batch_x, batch_f, runs=runs)
