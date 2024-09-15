@@ -54,14 +54,12 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
     # n is even
     # phi_conj is function handle
+    padded_size = torch.Size([np.prod([n[i] + 2 * m for i in range(len(n))])])
     window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
     window = torch.cartesian_prod(
-        *[
-            torch.arange(0, 2 * m, device=device, dtype=torch.long)
-            for _ in range(len(n))
-        ]
+        *[torch.arange(0, 2 * m, device=device, dtype=torch.int) for _ in range(len(n))]
     ).view(window_shape)
-    inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).long() - m)[
+    inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).int() - m)[
         None
     ] + window
     increments = (
@@ -72,23 +70,21 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     )
 
     cumprods = torch.cumprod(
-        torch.flip(torch.tensor(n, dtype=torch.long, device=device) + 2 * m, (0,)), 0
+        torch.flip(torch.tensor(n, dtype=torch.int, device=device) + 2 * m, (0,)), 0
     )
-    padded_size = cumprods[-1]
     cumprods = cumprods[:-1]
-    size_mults = torch.ones(len(n), dtype=torch.long, device=device)
+    size_mults = torch.ones(len(n), dtype=torch.int, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
-
     g_linear = torch.zeros(
-        (increments.shape[1] * increments.shape[2] * padded_size,),
+        padded_size[0] * increments.shape[1] * increments.shape[2],
         device=device,
         dtype=increments.dtype,
     )
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
     inds = inds + torch.tensor(
-        [n[i] // 2 + m for i in range(len(n))], dtype=torch.long, device=device
+        [n[i] // 2 + m for i in range(len(n))], dtype=torch.int, device=device
     )
 
     # handling dimensions
@@ -97,33 +93,49 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # handling batch dimensions in linear indexing
     inds = (
         inds.tile(1, 1, f.shape[1], 1)
-        + padded_size
-        * torch.arange(0, increments.shape[2], device=device, dtype=torch.long)[
+        + padded_size[0]
+        * torch.arange(0, increments.shape[2], device=device, dtype=torch.int)[
             None, None, :, None
         ]
-        + padded_size
+        + padded_size[0]
         * increments.shape[2]
-        * torch.arange(0, increments.shape[1], device=device, dtype=torch.long)[
+        * torch.arange(0, increments.shape[1], device=device, dtype=torch.int)[
             None, :, None, None
         ]
     )
 
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
     g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
-    g = g_linear.view(g_shape)
+    g = g_linear.view(g_shape).contiguous()
+    # print(g.shape)
     # handle overflows
-    for i in range(len(n)):
-        g.index_add_(
-            i + 2,
-            torch.arange(n[i], n[i] + m, dtype=torch.long, device=device),
-            torch.narrow(g, i + 2, 0, m).clone(),
-        )
-        g.index_add_(
-            i + 2,
-            torch.arange(m, 2 * m, dtype=torch.long, device=device),
-            torch.narrow(g, i + 2, n[i] + m, m).clone(),
-        )
-        g = torch.narrow(g, i + 2, m, n[i])
+    if len(n) <= 4:
+        g[:, :, -2 * m : -m] += g[:, :, :m]
+        g[:, :, m : 2 * m] += g[:, :, -m:]
+        g = g[:, :, m:-m]
+        if len(n) >= 2:
+            g[:, :, :, -2 * m : -m] += g[:, :, :, :m]
+            g[:, :, :, m : 2 * m] += g[:, :, :, -m:]
+            g = g[:, :, :, m:-m]
+        if len(n) == 3:
+            g[:, :, :, :, -2 * m : -m] += g[:, :, :, :, :m]
+            g[:, :, :, :, m : 2 * m] += g[:, :, :, :, -m:]
+            g = g[:, :, :, :, m:-m]
+    else:
+        # if someone is crazy enough (and has time and resources) for trying an NFFT in >4 dimensions.
+        # Currently throws errors with torch.compile, but eager execution works
+        for i in range(len(n)):
+            g.index_add_(
+                i + 2,
+                torch.arange(n[i], n[i] + m, dtype=torch.int, device=device),
+                torch.narrow(g, i + 2, 0, m).clone(),
+            )
+            g.index_add_(
+                i + 2,
+                torch.arange(m, 2 * m, dtype=torch.int, device=device),
+                torch.narrow(g, i + 2, n[i] + m, m).clone(),
+            )
+            g = torch.narrow(g, i + 2, m, n[i])
     return g
 
 
@@ -160,12 +172,9 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     # phi is function handle
     window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
     window = torch.cartesian_prod(
-        *[
-            torch.arange(0, 2 * m, device=device, dtype=torch.long)
-            for _ in range(len(n))
-        ]
+        *[torch.arange(0, 2 * m, device=device, dtype=torch.int) for _ in range(len(n))]
     ).view(window_shape)
-    inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).long() - m)[
+    inds = (torch.ceil(x * torch.tensor(n, dtype=x.dtype, device=device)).int() - m)[
         None
     ] + window
     increments = phi(
@@ -177,11 +186,11 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     inds = inds.tile(1, 1, g.shape[1], 1, 1)
 
     cumprods = torch.cumprod(
-        torch.flip(torch.tensor(n, dtype=torch.long, device=device), (0,)), 0
+        torch.flip(torch.tensor(n, dtype=torch.int, device=device), (0,)), 0
     )
     nonpadded_size = cumprods[-1]
     cumprods = cumprods[:-1]
-    size_mults = torch.ones(len(n), dtype=torch.long, device=device)
+    size_mults = torch.ones(len(n), dtype=torch.int, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
     # handling dimensions
@@ -190,12 +199,12 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     inds = (
         inds
         + nonpadded_size
-        * torch.arange(0, g.shape[1], device=device, dtype=torch.long)[
+        * torch.arange(0, g.shape[1], device=device, dtype=torch.int)[
             None, None, :, None
         ]
         + nonpadded_size
         * g.shape[1]
-        * torch.arange(0, x.shape[0], device=device, dtype=torch.long)[
+        * torch.arange(0, x.shape[0], device=device, dtype=torch.int)[
             None, :, None, None
         ]
     )
@@ -366,6 +375,7 @@ class NFFT(torch.nn.Module):
         window=None,
         device="cuda" if torch.cuda.is_available() else "cpu",
         double_precision=False,
+        no_compile=False,
     ):
         # N: number of not-oversampled Fourier coefficients
         # n: oversampled number of Fourier coefficients
@@ -389,6 +399,9 @@ class NFFT(torch.nn.Module):
         self.device = device
         self.float_type = torch.float64 if double_precision else torch.float32
         self.complex_type = torch.complex128 if double_precision else torch.complex64
+        self.padded_size = int(
+            np.prod([self.n[i] + 2 * self.m for i in range(len(self.n))])
+        )
         if window is None:
             self.window = KaiserBesselWindow(
                 self.n,
@@ -400,20 +413,19 @@ class NFFT(torch.nn.Module):
             )
         else:
             self.window = window
+        if no_compile:
+            self.forward_fun = forward_nfft
+            self.adjoint_fun = adjoint_nfft
+        else:
+            self.forward_fun = torch.compile(forward_nfft)
+            self.adjoint_fun = torch.compile(adjoint_nfft)
 
     def forward(self, x, f_hat):
-        return ForwardNFFT.apply(
+        return self.forward_fun(
             x, f_hat, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
 
     def adjoint(self, x, f):
-        return AdjointNFFT.apply(
-            x,
-            f,
-            self.N,
-            self.n,
-            self.m,
-            self.window,
-            self.window.ft,
-            self.device,
+        return self.adjoint_fun(
+            x, f, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )

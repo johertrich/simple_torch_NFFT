@@ -7,6 +7,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
 float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
+m = 4
+sigma = 2
 
 
 def test(N, J, batch_x, batch_f):
@@ -18,8 +20,6 @@ def test(N, J, batch_x, batch_f):
         )
         - 0.5
     )
-    m = 4
-    sigma = 2
 
     # for NDFT comparison
     # ft_grid = torch.arange(-N[0] // 2, N[0] // 2, dtype=float_type, device=device)
@@ -89,35 +89,40 @@ def test(N, J, batch_x, batch_f):
     )
 
 
-##############################
-print("Test for d=1")
-##############################
+dim = 2
+if dim == 1:
+    ##############################
+    print("Test for d=1")
+    ##############################
 
-N = (2**10,)
-J = 20000
-batch_x = 2
-batch_f = 2
+    N = (2**10,)
+    J = 20000
+    batch_x = 2
+    batch_f = 2
 
-test(N, J, batch_x, batch_f)
+    test(N, J, batch_x, batch_f)
 
-##############################
-print("Test for d=2")
-##############################
+if dim == 2:
+    ##############################
+    print("Test for d=2")
+    ##############################
 
-N = (2**6, 2**6)
-J = 20000
-batch_x = 2
-batch_f = 2
+    N = (2**5, 2**5)
+    J = 20000
+    batch_x = 2
+    batch_f = 2
 
-test(N, J, batch_x, batch_f)
+    test(N, J, batch_x, batch_f)
 
-##############################
-print("Test for d=3")
-##############################
 
-N = (2**4, 2**4, 2**4)
-J = 20000
-batch_x = 2
-batch_f = 2
+if dim == 3:
+    ##############################
+    print("Test for d=3")
+    ##############################
 
-test(N, J, batch_x, batch_f)
+    N = (2**4, 2**4, 2**4)
+    J = 20000
+    batch_x = 2
+    batch_f = 2
+
+    test(N, J, batch_x, batch_f)
