@@ -272,6 +272,9 @@ class KaiserBesselWindow(torch.nn.Module):
         # sigma: oversampling
         # method adapted from NFFT.jl
         super().__init__()
+        n=n[0]
+        N=N[0]
+        sigma=sigma[0]
         self.n = n
         self.N = N
         self.m = m
@@ -343,11 +346,17 @@ class NFFT(torch.nn.Module):
         # sigma: oversampling
         # m: Window size
         super().__init__()
-        self.N = 2 * (N // 2)  # make N even
-        if n is None:
-            self.n = 2 * (int(sigma * self.N) // 2)  # make n even
+        if isinstance(N,int):
+            self.N = (2 * (N // 2),)  # make N even
         else:
-            self.n = 2 * (n // 2)  # make n even
+            self.N = tuple([2 * (N[i] // 2) for i in range(len(N))])
+        if n is None:
+            self.n = tuple([2 * (int(sigma * self.N[i]) // 2) for i in range(len(self.N))])  # make n even
+        else:
+            if isinstance(n,int):
+                self.n = (2 * (n // 2),)  # make n even
+            else:
+                self.n = tuple([2 * (n[i] // 2) for i in range(len(n))])
         self.m = m
         self.device = device
         self.float_type = torch.float64 if double_precision else torch.float32
@@ -357,7 +366,7 @@ class NFFT(torch.nn.Module):
                 self.n,
                 self.N,
                 self.m,
-                self.n / self.N,
+                tuple([self.n[i] / self.N[i] for i in range(len(self.N))]),
                 device=device,
                 float_type=self.float_type,
             )
@@ -366,15 +375,15 @@ class NFFT(torch.nn.Module):
 
     def forward(self, x, f_hat):
         return ForwardNFFT.apply(
-            x.unsqueeze(-1), f_hat, (self.N,), (self.n,), self.m, self.window, self.window.ft, self.device
+            x, f_hat, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
 
     def adjoint(self, x, f):
         return AdjointNFFT.apply(
-            x.unsqueeze(-1),
+            x,
             f,
-            (self.N,),
-            (self.n,),
+            self.N,
+            self.n,
             self.m,
             self.window,
             self.window.ft,

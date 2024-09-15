@@ -41,7 +41,7 @@ nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precisio
 f = torch.randn((k.shape[0], 2, k.shape[2]), dtype=complex_type, device=device)
 
 # compute NFFT
-fHat = nfft.adjoint(k, f)
+fHat = nfft.adjoint(k.unsqueeze(-1), f)
 
 # comparison with NDFT
 fHat_dft = torch.stack(
@@ -70,7 +70,7 @@ print(
 fHat = torch.randn((k.shape[0], 2, N), dtype=complex_type, device=device)
 
 # compute NFFT
-f = nfft(k, fHat)
+f = nfft(k.unsqueeze(-1), fHat)
 
 # comparison with NDFT
 f_dft = torch.stack(
@@ -151,10 +151,10 @@ f = torch.randn([k.shape[0], f_batches, k.shape[-1]], dtype=complex_type, device
 batch_size = 1
 
 # compile
-fHat_stacked = batched_nfft(nfft.adjoint, k, f)
-fHat = nfft.adjoint(k, f)
-f = nfft(k, fHat)
-f_stacked = batched_nfft(nfft, k, fHat)
+fHat_stacked = batched_nfft(nfft.adjoint, k.unsqueeze(-1), f)
+fHat = nfft.adjoint(k.unsqueeze(-1), f)
+f = nfft(k.unsqueeze(-1), fHat)
+f_stacked = batched_nfft(nfft, k.unsqueeze(-1), fHat)
 
 # ground truth via NDFT
 # fHat_dft=ndft_adjoint(k.squeeze(),f.squeeze(),ft_grid)
@@ -164,7 +164,7 @@ print("\n\nAdjoint:\n")
 sync()
 tic = time.time()
 for _ in range(runs):
-    fHat_stacked = batched_nfft(nfft.adjoint, k, f)
+    fHat_stacked = batched_nfft(nfft.adjoint, k.unsqueeze(-1), f)
     sync()
 toc = time.time() - tic
 print("Stacked:", toc)
@@ -173,7 +173,7 @@ print("Stacked:", toc)
 sync()
 tic = time.time()
 for _ in range(runs):
-    fHat = nfft.adjoint(k, f)
+    fHat = nfft.adjoint(k.unsqueeze(-1), f)
     sync()
 toc = time.time() - tic
 print("Simple:", toc)
@@ -202,7 +202,7 @@ fHat = torch.randn((k.shape[0], f.shape[1], N), dtype=complex_type, device=devic
 sync()
 tic = time.time()
 for _ in range(runs):
-    f_stacked = batched_nfft(nfft, k, fHat)
+    f_stacked = batched_nfft(nfft, k.unsqueeze(-1), fHat)
     sync()
 toc = time.time() - tic
 print("Stacked:", toc)
@@ -211,7 +211,7 @@ print("Stacked:", toc)
 sync()
 tic = time.time()
 for _ in range(runs):
-    f = nfft(k, fHat)
+    f = nfft(k.unsqueeze(-1), fHat)
     sync()
 toc = time.time() - tic
 print("Simple:", toc)
