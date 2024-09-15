@@ -4,13 +4,6 @@ import numpy as np
 # Very simple but vectorized version of the NFFT
 
 
-def ndft_adjoint_1d(x, f, fts):
-    # not vectorized adjoint NDFT for test purposes
-    fourier_tensor = torch.exp(2j * torch.pi * fts[:, None] * x[None, :])
-    y = torch.matmul(fourier_tensor, f[:, None])
-    return y.squeeze()
-
-
 def ndft_adjoint(x, f, N):
     # not vectorized adjoint NDFT for test purposes
     inds = torch.cartesian_prod(
@@ -40,13 +33,6 @@ def ndft_forward(x, fHat):
     )
     y = torch.matmul(fourier_tensor, fHat.view(-1, 1))
     return y.view(x.shape[0])
-
-
-def ndft_forward_1d(x, fHat, fts):
-    # not vectorized forward NDFT for test purposes
-    fourier_tensor = torch.exp(-2j * torch.pi * fts[None, :] * x[:, None])
-    y = torch.matmul(fourier_tensor, fHat[:, None])
-    return y.squeeze()
 
 
 def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
