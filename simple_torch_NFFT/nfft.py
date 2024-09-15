@@ -231,6 +231,7 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
 
 # wrap autograd function around AdjointNFFT
 class AdjointNFFT(torch.autograd.Function):
+
     @staticmethod
     def forward(x, f, N, n, m, phi_conj, phi_hat, device):
         return adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device)
@@ -238,16 +239,31 @@ class AdjointNFFT(torch.autograd.Function):
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         x, _, N, n, m, phi_conj, phi_hat, device = inputs
-        ctx.save_for_backward(x, N, n, m, phi_conj, phi_hat, device)
+        ctx.N = N
+        ctx.n = n
+        ctx.m = m
+        ctx.phi_conj = phi_conj
+        ctx.phi_hat = phi_hat
+        ctx.device = device
+        ctx.save_for_backward(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        x, N, n, m, phi_conj, phi_hat, device = ctx.saved_tensors
+        (x,) = ctx.saved_tensors
 
         if ctx.needs_input_grad[1]:
             # call forward_nfft in the backward pass
             # assume that phi is real-valued (otherwise we would need a conjugate around the phi_conj here)
-            grad_f = forward_nfft(x, grad_output, N, n, m, phi_conj, phi_hat, device)
+            grad_f = forward_nfft(
+                x,
+                grad_output,
+                ctx.N,
+                ctx.n,
+                ctx.m,
+                ctx.phi_conj,
+                ctx.phi_hat,
+                ctx.device,
+            )
         return None, grad_f, None, None, None, None, None, None
 
 
@@ -260,16 +276,24 @@ class ForwardNFFT(torch.autograd.Function):
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         x, _, N, n, m, phi, phi_hat, device = inputs
-        ctx.save_for_backward(x, N, n, m, phi, phi_hat, device)
+        ctx.N = N
+        ctx.n = n
+        ctx.m = m
+        ctx.phi = phi
+        ctx.phi_hat = phi_hat
+        ctx.device = device
+        ctx.save_for_backward(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        x, N, n, m, phi, phi_hat, device = ctx.saved_tensors
+        (x,) = ctx.saved_tensors
 
         if ctx.needs_input_grad[1]:
             # call adjoint_nfft in the backward pass
             # assume that phi is real-valued (otherwise we would need a conjugate around the phi here)
-            grad_f_hat = adjoint_nfft(x, grad_output, N, n, m, phi, phi_hat, device)
+            grad_f_hat = adjoint_nfft(
+                x, grad_output, ctx.N, ctx.n, ctx.m, ctx.phi, ctx.phi_hat, ctx.device
+            )
 
         return None, grad_f_hat, None, None, None, None, None, None
 
@@ -415,11 +439,11 @@ class NFFT(torch.nn.Module):
                 float_type=self.float_type,
             )
         if no_compile:
-            self.forward_fun = forward_nfft
-            self.adjoint_fun = adjoint_nfft
+            self.forward_fun = ForwardNFFT.apply
+            self.adjoint_fun = AdjointNFFT.apply
         else:
-            self.forward_fun = torch.compile(forward_nfft)
-            self.adjoint_fun = torch.compile(adjoint_nfft)
+            self.forward_fun = torch.compile(ForwardNFFT.apply)
+            self.adjoint_fun = torch.compile(AdjointNFFT.apply)
 
     def forward(self, x, f_hat):
         return self.forward_fun(

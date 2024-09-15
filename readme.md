@@ -8,8 +8,6 @@ are computed during initialization of the NFFT object.
 ## Comments towards the State of Implementation
 
 - so far only autograd wrt f/f_hat not wrt basis points
-- autograd not working yet
-- more efficient with small cutoff parameters...
 - There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
 
 ## Requirements
