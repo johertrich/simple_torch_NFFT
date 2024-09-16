@@ -11,7 +11,6 @@ if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     )
     never_compile = True
 
-# Very simple but vectorized version of the NFFT
 
 
 def ndft_adjoint(x, f, N):
@@ -48,7 +47,7 @@ def ndft_forward(x, fHat):
 def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # x is four-dimensional: batch_x times 1 times #basis points times dimension
     # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
-    # n is even
+    # n is a tuple of even values
     # phi_conj is function handle
     padded_size = torch.Size([np.prod([n[i] + 2 * m for i in range(len(n))])])
     window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
@@ -102,8 +101,8 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
 
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
     g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
-    g = g_linear.view(g_shape).contiguous()
-    # print(g.shape)
+    g = g_linear.view(g_shape)
+    
     # handle overflows
     if len(n) <= 4:
         g[:, :, -2 * m : -m] += g[:, :, :m]
@@ -135,13 +134,12 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     return g
 
 
-# @torch.compile
 def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
-    # x is two-dimensional: batch_dim times basis points
-    # f has same size as x or is broadcastable
-    # n is even
+    # x is four-dimensional: batch_x times 1 times #basis points times dimension
+    # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
+    # n is a tuple of even values
     # phi_conj is function handle
-    # N is even
+    # N is a tuple of even values
     # phi_hat starts with negative indices
     cut = [(n[i] - N[i]) // 2 for i in range(len(n))]
     g = transposed_sparse_convolution(x, f, n, m, phi_conj, device)
@@ -162,9 +160,9 @@ def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
 
 
 def sparse_convolution(x, g, n, m, M, phi, device):
-    # x is two-dimensional: batch_dim times basis points
-    # g lives on (discretized) [-1/2,1/2)
-    # n is even
+    # x is four-dimensional: batch_x times 1 times #basis points times dimension
+    # g lives on (discretized) [-1/2,1/2)^d
+    # n is a tuple of even values
     # phi is function handle
     window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
     window = torch.cartesian_prod(
@@ -210,15 +208,14 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     return f
 
 
-# @torch.compile
 def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
-    # x is three-dimensional: batch_x times 1 times #basis points
-    # f_hat has size (batch_x,batch_f,N)
-    # n is even
+    # x is four-dimensional: batch_x times 1 times #basis points times dimension
+    # f_hat has size (batch_x,batch_f,N_1,...,N_d)
+    # n is tuple of even values
     # phi is function handle
-    # N is even
+    # N is a tuple of even values
     # phi_hat starts with negtive indices
-    # f_hat fängt mit negativen indizes an
+    # f_hat starts negative indices
     g_hat = f_hat / phi_hat
     for i in range(len(n)):
         g_hat_shape = list(g_hat.shape)
@@ -235,7 +232,7 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
         g = torch.fft.fftn(g_hat, norm="backward", dim=lastdims)
     g = torch.fft.ifftshift(g, lastdims)  # shift such that g lives again on [-1/2,1/2)
     f = sparse_convolution(x, g, n, m, x.shape[2], phi, device)
-    # f has same size as x
+    # f has same size as x (without last dimension)
     return f
 
 
@@ -271,8 +268,8 @@ class KaiserBesselWindow(torch.nn.Module):
         device="cuda" if torch.cuda.is_available() else "cpu",
         float_type=torch.float32,
     ):
-        # n: number of oversampled Fourier coefficients
-        # N: number of not-oversampled Fourier coefficients
+        # n: size of oversampled regular grid
+        # N: size of not-oversampled regular grid
         # m: Window size
         # sigma: oversampling
         # method adapted from NFFT.jl
@@ -317,8 +314,8 @@ class GaussWindow(torch.nn.Module):
         device="cuda" if torch.cuda.is_available() else "cpu",
         float_type=torch.float32,
     ):
-        # n: number of oversampled Fourier coefficients
-        # N: number of not-oversampled Fourier coefficients
+        # n: size of oversampled regular grid
+        # N: size of not-oversampled regular grid
         # m: Window size
         # sigma: oversampling
         super().__init__()
@@ -359,8 +356,8 @@ class NFFT(torch.nn.Module):
         no_compile=False,
         grad_via_adjoint=True,
     ):
-        # N: number of not-oversampled Fourier coefficients
-        # n: oversampled number of Fourier coefficients
+        # n: size of oversampled regular grid
+        # N: size of not-oversampled regular grid
         # sigma: oversampling
         # m: Window size
         super().__init__()
