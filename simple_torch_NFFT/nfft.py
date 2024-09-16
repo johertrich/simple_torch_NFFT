@@ -12,7 +12,6 @@ if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     never_compile = True
 
 
-
 def ndft_adjoint(x, f, N):
     # not vectorized adjoint NDFT for test purposes
     inds = torch.cartesian_prod(
@@ -102,7 +101,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
     g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
     g = g_linear.view(g_shape)
-    
+
     # handle overflows
     if len(n) <= 4:
         g[:, :, -2 * m : -m] += g[:, :, :m]
@@ -240,22 +239,21 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
 class LinearAutograd(torch.autograd.Function):
     @staticmethod
     def forward(x, inp, forward, adjoint):
-        return forward(x,inp)
-    
+        return forward(x, inp)
+
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        x,_,forward,adjoint= inputs
-        ctx.adjoint=adjoint
-        ctx.forward=forward
+        x, _, forward, adjoint = inputs
+        ctx.adjoint = adjoint
+        ctx.forward = forward
         ctx.save_for_backward(x)
-        
+
     @staticmethod
     def backward(ctx, grad_output):
-        x,=ctx.saved_tensors
+        (x,) = ctx.saved_tensors
         if ctx.needs_input_grad[1]:
-            grad_inp=LinearAutograd.apply(x,grad_output,ctx.adjoint,ctx.forward)
-        return None, grad_inp,None,None
-
+            grad_inp = LinearAutograd.apply(x, grad_output, ctx.adjoint, ctx.forward)
+        return None, grad_inp, None, None
 
 
 class KaiserBesselWindow(torch.nn.Module):
@@ -409,27 +407,28 @@ class NFFT(torch.nn.Module):
         else:
             self.forward_fun = torch.compile(forward_nfft)
             self.adjoint_fun = torch.compile(adjoint_nfft)
-        self.grad_via_adjoint=grad_via_adjoint
-    
+        self.grad_via_adjoint = grad_via_adjoint
+
     def apply_forward(self, x, f_hat):
         return self.forward_fun(
             x, f_hat, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
+
     def apply_adjoint(self, x, f):
         return self.adjoint_fun(
             x, f, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
-        
 
     def forward(self, x, f_hat):
         if self.grad_via_adjoint:
-            return LinearAutograd.apply(x,f_hat,self.apply_forward,self.apply_adjoint)
+            return LinearAutograd.apply(
+                x, f_hat, self.apply_forward, self.apply_adjoint
+            )
         else:
-            return self.apply_forward(x,f_hat)
+            return self.apply_forward(x, f_hat)
 
     def adjoint(self, x, f):
-        
         if self.grad_via_adjoint:
-            return LinearAutograd.apply(x,f,self.apply_adjoint,self.apply_forward)
+            return LinearAutograd.apply(x, f, self.apply_adjoint, self.apply_forward)
         else:
-            return self.apply_adjoint(x,f)
+            return self.apply_adjoint(x, f)
