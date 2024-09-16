@@ -239,92 +239,26 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     return f
 
 
-# wrap autograd function around AdjointNFFT
-class AdjointNFFT(torch.autograd.Function):
-
+# Autograd Wrapper for linear functions
+class LinearAutograd(torch.autograd.Function):
     @staticmethod
-    def forward(x, f, N, n, m, phi_conj, phi_hat, device):
-        return adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device)
-
+    def forward(x, inp, forward, adjoint):
+        return forward(x,inp)
+    
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        x, _, N, n, m, phi_conj, phi_hat, device = inputs
-        ctx.N = N
-        ctx.n = n
-        ctx.m = m
-        ctx.phi_conj = phi_conj
-        ctx.phi_hat = phi_hat
-        ctx.device = device
+        x,_,forward,adjoint= inputs
+        ctx.adjoint=adjoint
+        ctx.forward=forward
         ctx.save_for_backward(x)
-
+        
     @staticmethod
     def backward(ctx, grad_output):
-        (x,) = ctx.saved_tensors
-
+        x,=ctx.saved_tensors
         if ctx.needs_input_grad[1]:
-            # call forward_nfft in the backward pass
-            # assume that phi is real-valued (otherwise we would need a conjugate around the phi_conj here)
-            grad_f = forward_nfft(
-                x,
-                grad_output,
-                ctx.N,
-                ctx.n,
-                ctx.m,
-                ctx.phi_conj,
-                ctx.phi_hat,
-                ctx.device,
-            )
-        return None, grad_f, None, None, None, None, None, None
+            grad_inp=LinearAutograd.apply(x,grad_output,ctx.adjoint,ctx.forward)
+        return None, grad_inp,None,None
 
-
-# wrwap autograd function around ForwardNFFT
-class ForwardNFFT(torch.autograd.Function):
-    @staticmethod
-    def forward(x, f_hat, N, n, m, phi, phi_hat, device):
-        return forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device)
-
-    @staticmethod
-    def setup_context(ctx, inputs, outputs):
-        x, f_hat, N, n, m, phi, phi_hat, device = inputs
-        ctx.N = N
-        ctx.n = n
-        ctx.m = m
-        ctx.phi = phi
-        ctx.phi_hat = phi_hat
-        ctx.device = device
-        ctx.save_for_backward(x, f_hat)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        (x, f_hat) = ctx.saved_tensors
-
-        if ctx.needs_input_grad[1]:
-            # grad wrt forward is backward
-            # assume that phi is real-valued (otherwise we would need a conjugate around the phi here)
-            grad_f_hat = adjoint_nfft(
-                x, grad_output, ctx.N, ctx.n, ctx.m, ctx.phi, ctx.phi_hat, ctx.device
-            )
-        """ not working so far
-        if ctx.needs_input_grad[0]:
-            # grad wrt x is again a forward NFFT
-            inds = torch.cartesian_prod(
-            *[
-                torch.arange(
-                    -ctx.N[i] // 2, ctx.N[i] // 2, dtype=float_type, device=device
-                )
-                for i in range(len(self.N))
-            ]
-            ).reshape(list(ctx.N) + [-1])
-            perm=[len(ctx.N)-1]+list(range(len(ctx.N)-1))
-            inds=inds.permute(perm)
-            if f_hat.shape[0]<x.shape[0]:
-                f_hat=f_hat.tile(x.shape[0],...)
-            f_hat=-2j*torch.pi*f_hat.unsqueeze(2)*inds
-            x=x.tile((len(N),...)
-            f_hat=f_hat.view(x.shape)
-            grad_x=
-        """
-        return None, grad_f_hat, None, None, None, None, None, None
 
 
 class KaiserBesselWindow(torch.nn.Module):
@@ -473,26 +407,32 @@ class NFFT(torch.nn.Module):
                 warnings.warn(
                     "Compile is deactivated since the PyTorch version is too old. Consider to update PyTorch to 2.4 or newer."
                 )
-            if grad_via_adjoint:
-                self.forward_fun = ForwardNFFT.apply
-                self.adjoint_fun = AdjointNFFT.apply
-            else:
-                self.forward_fun = forward_nfft
-                self.adjoint_fun = adjoint_nfft
+            self.forward_fun = forward_nfft
+            self.adjoint_fun = adjoint_nfft
         else:
-            if grad_via_adjoint:
-                self.forward_fun = torch.compile(ForwardNFFT.apply)
-                self.adjoint_fun = torch.compile(AdjointNFFT.apply)
-            else:
-                self.forward_fun = torch.compile(forward_nfft)
-                self.adjoint_fun = torch.compile(adjoint_nfft)
-
-    def forward(self, x, f_hat):
+            self.forward_fun = torch.compile(forward_nfft)
+            self.adjoint_fun = torch.compile(adjoint_nfft)
+        self.grad_via_adjoint=grad_via_adjoint
+    
+    def apply_forward(self, x, f_hat):
         return self.forward_fun(
             x, f_hat, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
-
-    def adjoint(self, x, f):
+    def apply_adjoint(self, x, f):
         return self.adjoint_fun(
             x, f, self.N, self.n, self.m, self.window, self.window.ft, self.device
         )
+        
+
+    def forward(self, x, f_hat):
+        if self.grad_via_adjoint:
+            return LinearAutograd.apply(x,f_hat,self.apply_forward,self.apply_adjoint)
+        else:
+            return self.apply_forward(x,f_hat)
+
+    def adjoint(self, x, f):
+        
+        if self.grad_via_adjoint:
+            return LinearAutograd.apply(x,f,self.apply_adjoint,self.apply_forward)
+        else:
+            return self.apply_adjoint(x,f)
