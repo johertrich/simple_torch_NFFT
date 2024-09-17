@@ -104,32 +104,37 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
 
     # handle overflows
     if len(n) <= 4:
-        g[:, :, -2 * m : -m] += g[:, :, :m]
-        g[:, :, m : 2 * m] += g[:, :, -m:]
-        g = g[:, :, m:-m]
+        g[..., -2 * m : -m] += g[..., :m]
+        g[..., m : 2 * m] += g[..., -m:]
+        g = g[..., m:-m]
         if len(n) >= 2:
-            g[:, :, :, -2 * m : -m] += g[:, :, :, :m]
-            g[:, :, :, m : 2 * m] += g[:, :, :, -m:]
-            g = g[:, :, :, m:-m]
+            g[..., -2 * m : -m, :] += g[..., :m, :]
+            g[..., m : 2 * m, :] += g[..., -m:, :]
+            g = g[..., m:-m, :]
         if len(n) == 3:
-            g[:, :, :, :, -2 * m : -m] += g[:, :, :, :, :m]
-            g[:, :, :, :, m : 2 * m] += g[:, :, :, :, -m:]
-            g = g[:, :, :, :, m:-m]
+            g[..., -2 * m : -m, :, :] += g[..., :m, :, :]
+            g[..., m : 2 * m, :, :] += g[..., -m:, :, :]
+            g = g[..., m:-m, :, :]
+        if len(n) == 4:
+            g[..., -2 * m : -m, :, :, :] += g[..., :m, :, :, :]
+            g[..., m : 2 * m, :, :, :] += g[..., -m:, :, :, :]
+            g = g[..., m:-m, :, :, :]
     else:
-        # if someone is crazy enough (and has time and resources) for trying an NFFT in >4 dimensions.
-        # Currently throws errors with torch.compile, but eager execution works
+        # if someone is crazy enough (and has time and resources) for trying an NFFT in >3 dimensions.
+        # Currently throws errors with torch.compile, but eager execution works,
+        # but since NFFTs in d>4 are likely to be intractable anyway, I won't invest effort to fix that...
         for i in range(len(n)):
             g.index_add_(
-                i + 2,
+                len(g) - len(n) + i,
                 torch.arange(n[i], n[i] + m, dtype=torch.int, device=device),
-                torch.narrow(g, i + 2, 0, m).clone(),
+                torch.narrow(g, len(g) - len(n) + i, 0, m).clone(),
             )
             g.index_add_(
-                i + 2,
+                len(g) - len(n) + i,
                 torch.arange(m, 2 * m, dtype=torch.int, device=device),
-                torch.narrow(g, i + 2, n[i] + m, m).clone(),
+                torch.narrow(g, len(g) - len(n) + i, n[i] + m, m).clone(),
             )
-            g = torch.narrow(g, i + 2, m, n[i])
+            g = torch.narrow(g, len(g) - len(n) + i, m, n[i])
     return g
 
 
@@ -230,7 +235,7 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     else:
         g = torch.fft.fftn(g_hat, norm="backward", dim=lastdims)
     g = torch.fft.ifftshift(g, lastdims)  # shift such that g lives again on [-1/2,1/2)
-    f = sparse_convolution(x, g, n, m, x.shape[2], phi, device)
+    f = sparse_convolution(x, g, n, m, x.shape[-2], phi, device)
     # f has same size as x (without last dimension)
     return f
 
