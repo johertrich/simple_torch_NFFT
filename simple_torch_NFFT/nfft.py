@@ -98,7 +98,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
         ]
     )
 
-    g_linear.index_put_((inds.reshape(-1),), increments.reshape(-1), accumulate=True)
+    g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
     g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
     g = g_linear.view(g_shape)
 
@@ -420,6 +420,21 @@ class NFFT(torch.nn.Module):
         )
 
     def forward(self, x, f_hat):
+        # check dimensions
+        assert (
+            f_hat.shape[-len(self.n) :] == self.window.ft.shape
+        ), f"Shape {f_hat.shape} of f_hat does not match the size {self.N} of the regular grid!"
+        assert (
+            x.shape[1] == 1
+        ), f"x needs to have size 1 at dimension 1, given shape was {x.shape}"
+        assert (
+            f_hat.shape[0] == 1 or f_hat.shape[0] == x.shape[0]
+        ), f"f_hat needs to be broadcastable to x at dimension 0, given shapes were {f_hat.shape} (f_hat), {x.shape} (x)"
+        assert len(x.shape) == 4 and len(f_hat.shape) == 2 + len(
+            self.N
+        ), f"x needs to be 4-dimensional and f_hat needs to have 2+dim dimensions, given shapes were {f_hat.shape} (f_hat), {x.shape} (x)"
+
+        # apply NFFT
         if self.grad_via_adjoint:
             return LinearAutograd.apply(
                 x, f_hat, self.apply_forward, self.apply_adjoint
@@ -428,6 +443,21 @@ class NFFT(torch.nn.Module):
             return self.apply_forward(x, f_hat)
 
     def adjoint(self, x, f):
+        # check dimensions
+        assert (
+            f.shape[-1] == x.shape[-2]
+        ), f"Shape {x.shape} of basis points x does not match shape {f.shape} of f!"
+        assert (
+            x.shape[1] == 1
+        ), f"x needs to have size 1 at dimension 1, given shape was {x.shape}"
+        assert (
+            f.shape[0] == 1 or f.shape[0] == x.shape[0]
+        ), f"f needs to be broadcastable to x at dimension 0, given shapes were {f.shape} (f), {x.shape} (x)"
+        assert (
+            len(x.shape) == 4 and len(f.shape) == 3
+        ), f"x needs to be 4-dimensional and f needs to be 3-dimensional, given shapes were {f.shape} (f), {x.shape} (x)"
+
+        # apply NFFT
         if self.grad_via_adjoint:
             return LinearAutograd.apply(x, f, self.apply_adjoint, self.apply_forward)
         else:
