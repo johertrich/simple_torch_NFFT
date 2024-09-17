@@ -83,19 +83,16 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
 
     # handling dimensions
     inds = torch.sum(inds * size_mults, -1)
-
+    inds_tile = [
+        increments.shape[i] // inds.shape[i] for i in range(len(increments.shape))
+    ]
+    inds = inds.tile(inds_tile)
+    inds = inds.view(increments.shape[0], -1, increments.shape[-1])
     # handling batch dimensions in linear indexing
     inds = (
-        inds.tile(1, 1, f.shape[1], 1)
+        inds
         + padded_size[0]
-        * torch.arange(0, increments.shape[2], device=device, dtype=torch.int)[
-            None, None, :, None
-        ]
-        + padded_size[0]
-        * increments.shape[2]
-        * torch.arange(0, increments.shape[1], device=device, dtype=torch.int)[
-            None, :, None, None
-        ]
+        * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
     )
 
     g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
@@ -181,7 +178,6 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     # % n to prevent overflows
     for i in range(len(n)):
         inds[..., i] = (inds[..., i] + n[i] // 2) % n[i]
-    inds = inds.tile(1, 1, g.shape[1], 1, 1)
 
     cumprods = torch.cumprod(
         torch.flip(torch.tensor(n, dtype=torch.int, device=device), (0,)), 0
@@ -193,20 +189,31 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     size_mults = torch.flip(size_mults, (0,))
     # handling dimensions
     inds = torch.sum(inds * size_mults, -1)
+    # tiling
+    inds_tile = (
+        [1]
+        + [
+            max(inds.shape[i + 1], g.shape[i]) // inds.shape[i + 1]
+            for i in range(len(g.shape) - len(n))
+        ]
+        + [1 for _ in range(len(inds.shape) - len(g.shape) + len(n) - 1)]
+    )
+    inds = inds.tile(inds_tile)
 
+    inds_shape = inds.shape
+    inds = inds.view(inds.shape[0], -1, inds.shape[-1])
+    # handling batch dimensions in linear indexing
     inds = (
         inds
         + nonpadded_size
-        * torch.arange(0, g.shape[1], device=device, dtype=torch.int)[
-            None, None, :, None
-        ]
-        + nonpadded_size
-        * g.shape[1]
-        * torch.arange(0, x.shape[0], device=device, dtype=torch.int)[
-            None, :, None, None
-        ]
-    )
-    g_l = g.view(-1)[inds]
+        * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
+    ).view(inds_shape)
+
+    g_tile = [inds.shape[i + 1] // g.shape[i] for i in range(len(g.shape) - len(n))] + [
+        1 for _ in range(len(n))
+    ]
+    g = g.tile(g_tile).view(-1)
+    g_l = g[inds]
     g_l *= increments
     f = torch.sum(g_l, 0)
     return f
