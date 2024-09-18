@@ -25,11 +25,22 @@ except:
     )
     nfft3_comparison = False
 
+try:
+    import torchkbnufft as tkbn
+
+    tkbn_comparison = True
+except:
+    print(
+        "torchkbnufft cannot be loaded. Maybe it is not installed? Omit pyNFFT3 in the time comparison"
+    )
+    tkbn_comparison = False
+
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
 float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
-m = 8
+m = 3
 sigma = 2
 
 # for gpu testing
@@ -80,28 +91,30 @@ def torch_nfft_adjoint(x, f, N):
 
 
 def nfft3_forward(plan, x, fhat):
-    outs=[]
+    outs = []
     for i in range(x.shape[0]):
         plan.x = x[i]
-        outs_f=[]
+        outs_f = []
         for j in range(fhat.shape[1]):
-            plan.fhat = fhat[i,j]
+            plan.fhat = fhat[i, j]
             plan.trafo()
             outs_f.append(plan.f)
-        outs.append(np.stack(outs_f,0))
-    return np.stack(outs,0)
+        outs.append(np.stack(outs_f, 0))
+    return np.stack(outs, 0)
+
 
 def nfft3_adjoint(plan, x, f):
-    outs=[]
+    outs = []
     for i in range(x.shape[0]):
         plan.x = x[0]
-        outs_f=[]
+        outs_f = []
         for j in range(f.shape[1]):
-            plan.f=f[i,j]
+            plan.f = f[i, j]
             plan.adjoint()
             outs_f.append(plan.fhat)
-        outs.append(np.stack(outs_f,0))
-    return np.stack(outs,0)
+        outs.append(np.stack(outs_f, 0))
+    return np.stack(outs, 0)
+
 
 def run_test(method, runs):
     sync()
@@ -123,25 +136,63 @@ def test(N, J, batch_x, batch_f, runs=1):
         - 0.5
     )
     x_cpu = x.detach().cpu().numpy().astype(np.float64)
-    x_cpu = np.ascontiguousarray(x_cpu.reshape(batch_x,J,len(N)))
+    x_cpu = np.ascontiguousarray(x_cpu.reshape(batch_x, J, len(N)))
 
     # init nfft
     nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
     if nfft3_comparison:
         plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), J, m=m)
+    if tkbn_comparison:
+        # we use window size=2*m, torchkbnufft window size = numpoints # stimmt das???
+        tkbn_obj = tkbn.KbNufft(im_size=N, numpoints=2 * m)
+        tkbn_adj = tkbn.KbNufftAdjoint(im_size=N, numpoints=2 * m)
+        x_kb = 2 * torch.pi * x.clone()
+        x_kb = x_kb.squeeze(1)
+        x_kb = x_kb.transpose(-2, -1)
 
     f = torch.randn((batch_x, batch_f, J), dtype=complex_type, device=device)
     fHat_shape = [batch_x, batch_f] + list(N)
     fHat = torch.randn(fHat_shape, dtype=complex_type, device=device)
     # for pyNFFT3
-    fHat_cpu = fHat.detach().cpu().numpy().astype(np.complex128).squeeze().reshape(batch_x,batch_f,-1)
-    f_cpu = f.detach().cpu().numpy().astype(np.complex128).squeeze().reshape(batch_x,batch_f,-1)
+    fHat_cpu = (
+        fHat.detach()
+        .cpu()
+        .numpy()
+        .astype(np.complex128)
+        .squeeze()
+        .reshape(batch_x, batch_f, -1)
+    )
+    f_cpu = (
+        f.detach()
+        .cpu()
+        .numpy()
+        .astype(np.complex128)
+        .squeeze()
+        .reshape(batch_x, batch_f, -1)
+    )
 
     # compile
-    nfft(x, fHat)
-    nfft.adjoint(x, f)
+    out = nfft(x, fHat)
+    out_adj = nfft.adjoint(x, f)
     batched_nfft(nfft, x, fHat)
     batched_nfft(nfft.adjoint, x, f)
+    if tkbn_comparison:
+        # this should be in a different test file... This is only for runtime comparison
+        out_kb = tkbn_obj(fHat, x_kb)
+        print(
+            "Relative forward difference to torchkbnufft:",
+            torch.sqrt(
+                torch.sum(torch.abs(out_kb - out) ** 2) / torch.sum(torch.abs(out) ** 2)
+            ).item(),
+        )
+        out_kb_adj = tkbn_adj(f, x_kb)
+        print(
+            "Relative adjoint difference to torchkbnufft:",
+            torch.sqrt(
+                torch.sum(torch.abs(out_kb_adj - out_adj) ** 2)
+                / torch.sum(torch.abs(out_adj) ** 2)
+            ).item(),
+        )
 
     # runtime forward
     _, toc = run_test(lambda: nfft(x, fHat), runs)
@@ -150,6 +201,9 @@ def test(N, J, batch_x, batch_f, runs=1):
     print("Batched forward:", toc)
     _, toc = run_test(lambda: nfft3_forward(plan, x_cpu, fHat_cpu), runs)
     print("NFFT3 forward:", toc)
+    if tkbn_comparison:
+        _, toc = run_test(lambda: tkbn_obj(fHat, x_kb), runs)
+        print("Torchkbnufft forward:", toc)
     if torch_nfft_comparison:
         _, toc = run_test(lambda: torch_nfft(x, fHat), runs)
         print("torch_nfft package forward:", toc)
@@ -161,12 +215,15 @@ def test(N, J, batch_x, batch_f, runs=1):
     print("Batched adjoint:", toc)
     _, toc = run_test(lambda: nfft3_adjoint(plan, x_cpu, f_cpu), runs)
     print("NFFT3 adjoint:", toc)
+    if tkbn_comparison:
+        _, toc = run_test(lambda: tkbn_adj(f, x_kb), runs)
+        print("Torchkbnufft adjoint:", toc)
     if torch_nfft_comparison:
         _, toc = run_test(lambda: torch_nfft_adjoint(x, f, N), runs)
         print("torch_nfft package forward:", toc)
 
 
-N = (2**6,2**6)
+N = (2**6, 2**6)
 batch_x = 1
 batch_f = 1
 J = 100000
