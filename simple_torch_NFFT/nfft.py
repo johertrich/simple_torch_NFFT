@@ -70,11 +70,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     size_mults = torch.ones(len(n), dtype=torch.int, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
-    g_linear = torch.zeros(
-        padded_size[0] * increments.shape[1] * increments.shape[2],
-        device=device,
-        dtype=increments.dtype,
-    )
+
     # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
     # +m and 2*m to prevent overflows around 1/2=-1/2
     inds = inds + torch.tensor(
@@ -94,9 +90,14 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
         + padded_size[0]
         * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
     )
+    g_linear = torch.zeros(
+        padded_size[0] * inds.shape[1],
+        device=device,
+        dtype=increments.dtype,
+    )
 
     g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
-    g_shape = [x.shape[0], f.shape[1]] + [n[i] + 2 * m for i in range(len(n))]
+    g_shape = list(increments.shape[1:-1]) + [n[i] + 2 * m for i in range(len(n))]
     g = g_linear.view(g_shape)
 
     # handle overflows
@@ -228,12 +229,12 @@ def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
     # phi_hat starts with negtive indices
     # f_hat starts negative indices
     g_hat = f_hat / phi_hat
-    for i in range(len(n)):
-        g_hat_shape = list(g_hat.shape)
-        g_hat_shape[i + 2] = (n[i] - N[i]) // 2
-        pad = torch.zeros(g_hat_shape, device=device)
-        g_hat = torch.cat((pad, g_hat, pad), i + 2)
     lastdims = [-i for i in range(len(n), 0, -1)]
+    for i in lastdims:
+        g_hat_shape = list(g_hat.shape)
+        g_hat_shape[i] = (n[i] - N[i]) // 2
+        pad = torch.zeros(g_hat_shape, device=device)
+        g_hat = torch.cat((pad, g_hat, pad), i)
     g_hat = torch.fft.fftshift(g_hat, lastdims)
     if len(n) == 1:
         g = torch.fft.fft(g_hat, norm="backward")
@@ -436,15 +437,9 @@ class NFFT(torch.nn.Module):
         assert (
             f_hat.shape[-len(self.n) :] == self.window.ft.shape
         ), f"Shape {f_hat.shape} of f_hat does not match the size {self.N} of the regular grid!"
-        assert (
-            x.shape[1] == 1
-        ), f"x needs to have size 1 at dimension 1, given shape was {x.shape}"
-        assert (
-            f_hat.shape[0] == 1 or f_hat.shape[0] == x.shape[0]
-        ), f"f_hat needs to be broadcastable to x at dimension 0, given shapes were {f_hat.shape} (f_hat), {x.shape} (x)"
-        assert len(x.shape) == 4 and len(f_hat.shape) == 2 + len(
+        assert len(f_hat.shape) - len(x.shape) == -2 + len(
             self.N
-        ), f"x needs to be 4-dimensional and f_hat needs to have 2+dim dimensions, given shapes were {f_hat.shape} (f_hat), {x.shape} (x)"
+        ), f"x  and f_hat need to have the same number of batch dimensions, given shapes were {f_hat.shape} (f_hat), {x.shape} (x)"
 
         # apply NFFT
         if self.grad_via_adjoint:
@@ -460,14 +455,8 @@ class NFFT(torch.nn.Module):
             f.shape[-1] == x.shape[-2]
         ), f"Shape {x.shape} of basis points x does not match shape {f.shape} of f!"
         assert (
-            x.shape[1] == 1
-        ), f"x needs to have size 1 at dimension 1, given shape was {x.shape}"
-        assert (
-            f.shape[0] == 1 or f.shape[0] == x.shape[0]
-        ), f"f needs to be broadcastable to x at dimension 0, given shapes were {f.shape} (f), {x.shape} (x)"
-        assert (
-            len(x.shape) == 4 and len(f.shape) == 3
-        ), f"x needs to be 4-dimensional and f needs to be 3-dimensional, given shapes were {f.shape} (f), {x.shape} (x)"
+            len(x.shape) == len(f.shape) + 1
+        ), f"x f needs to have the same number of batch dimensions, given shapes were {f.shape} (f), {x.shape} (x)"
 
         # apply NFFT
         if self.grad_via_adjoint:
