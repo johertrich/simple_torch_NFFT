@@ -8,12 +8,18 @@ and allows batching.
 
 ## Requirements
 
-Just PyTorch (version >= 2.4, because otherwise torch.compile has issues with Python 3.12).
+Just PyTorch and NumPy are required.
 The package can be installed with
 
 ```
 pip install git+https://github.com/johertrich/simple_torch_NFFT
 ```
+
+By default, the package uses `torch.compile` which is not well supported for older versions of PyTorch and might
+cause issues with older GPUs.
+PyTorch version 2.4 (and newer) are recommended. 
+In order to run the compiled version on a GPU, CUDA compatibility, >= 7 will be required.
+The `torch.compile` can be deactivated in the constructor of the NFFT object (with `no_compile=True`).
 
 ## Usage
 
@@ -40,7 +46,7 @@ a windowing function.
 
 ### Implementation
 
-To use the NFFT, we first have to create an NFFT object, which takes as an input the size `N` of the equidistant
+To use the NFFT, we first have to create an NFFT object, which takes as an input the size `N=(N_1,...,N_d)` of the equidistant
 grid resulting in the constructor `nfft = NFFT(N)`. Optional arguments are given in the example below.
 
 The NFFT object provides the forward and adjoint NFFT approximating the forward and adjoint problem from above.
@@ -48,9 +54,13 @@ Here, the forward NFFT takes as argument the points `x` and the function values 
 adjoint NFFT takes the inputs `x` and `f` and returns `f_hat`. Thus, the resulting function calls are `nfft(x,f)` 
 (or equivalently `nfft.forward(x,f_hat)`) and `nfft.adjoint(x,f)`.
 
-All of these tensors have as the first dimension the batch dimension wrt `x`, as a second dimension the batch dimension wrt `f`.
-Consequently, `x` has size `(batch_x,1,M)`, `f_hat` has size `(batch_x,batch_f,N_1,...,N_d)` (as input broadcastable with size `(1,batch_f,N_1,...,N_d)`) and `f` has size `(batch_x,batch_f,M)` 
-(as input broadcastable with size `(1,batch_f,M)`). The entries of `f_hat` always start with the negative index `-N/2`, so you want to start with
+For testing reasons there exists also a class `NDFT` which explicitly computes the forward and backward problem. A NDFT object can
+be created by `ndft = NDFT(N)` and implements the same `ndft.forward(x,f_hat)` and `ndft.adjoint(x,f)` methods.
+
+All of these tensors support arbitrary batch dimensions. That is, `x` has size `(...,M,d)`, `f_hat` has size `(...,N)` 
+(or `(...,N_1,N_2)` for 2D, `(...,N_1,N_2,N_3)` for 3D and so on) and `f` has size `(...,M)`, 
+where `...` refers to the batch dimensions. For calling `forward(x,f_hat)` (or `adjoint(x,f)` respectively), the batch dimensions of the two inputs
+have to be equal or broadcastable. The entries of `f_hat` always start with the negative index `-N/2`, so you want to start with
 zero you have to use `torch.fft.ifftshift`.
 
 Forward and adjoint NFFT will be compiled at the first call.
