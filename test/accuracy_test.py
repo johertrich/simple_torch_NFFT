@@ -1,5 +1,4 @@
-from simple_torch_NFFT import NFFT, GaussWindow
-from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
+from simple_torch_NFFT import NFFT, NDFT
 import torch
 import time
 
@@ -59,6 +58,7 @@ def test(N, J, batch_x, batch_f):
 
     # init nfft
     nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
+    ndft = NDFT(N)
 
     if tkbn_comparison:
         # we use window size=2*m, torchkbnufft window size = numpoints, therefore we set numpoints=2*m
@@ -86,15 +86,7 @@ def test(N, J, batch_x, batch_f):
     # compute NFFT
     fHat = nfft.adjoint(x, f)
     # comparison with NDFT
-    fHat_dft = torch.stack(
-        [
-            torch.stack(
-                [ndft_adjoint(x[i, 0], f[i, j], N) for j in range(f.shape[1])], 0
-            )
-            for i in range(x.shape[0])
-        ],
-        0,
-    )
+    fHat_dft = ndft.adjoint(x, f)
 
     # relative error
     print(
@@ -129,16 +121,7 @@ def test(N, J, batch_x, batch_f):
     f = nfft(x, fHat)
 
     # comparison with NDFT
-    f_dft = torch.stack(
-        [
-            torch.stack(
-                [ndft_forward(x[i, 0], fHat[i, j]) for j in range(fHat.shape[1])],
-                0,
-            )
-            for i in range(x.shape[0])
-        ],
-        0,
-    )
+    f_dft = ndft(x, fHat)
 
     # relative error
     print(

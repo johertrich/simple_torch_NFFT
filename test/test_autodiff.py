@@ -1,5 +1,4 @@
-from simple_torch_NFFT import NFFT, GaussWindow
-from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
+from simple_torch_NFFT import NFFT, NDFT
 import torch
 import time
 
@@ -16,6 +15,7 @@ batch_x = 2
 batch_f = 2
 
 nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
+ndft = NDFT(N)
 
 x = (
     torch.rand(
@@ -37,13 +37,7 @@ f_grad = torch.autograd.grad(loss, f)[0]
 
 
 # comparison with NDFT
-fHat_dft = torch.stack(
-    [
-        torch.stack([ndft_adjoint(x[i, 0], f[i, j], N) for j in range(f.shape[1])], 0)
-        for i in range(x.shape[0])
-    ],
-    0,
-)
+fHat_dft = ndft.adjoint(x, f)
 
 loss_dft = torch.sum(torch.abs(fHat_dft))
 
@@ -63,16 +57,8 @@ loss = torch.sum(torch.abs(f))
 fHat_grad = torch.autograd.grad(loss, fHat)[0]
 
 # comparison with NDFT
-f_dft = torch.stack(
-    [
-        torch.stack(
-            [ndft_forward(x[i, 0], fHat[i, j]) for j in range(fHat.shape[1])],
-            0,
-        )
-        for i in range(x.shape[0])
-    ],
-    0,
-)
+f_dft = ndft(x, fHat)
+
 loss_dft = torch.sum(torch.abs(f_dft))
 fHat_grad2 = torch.autograd.grad(loss_dft, fHat)[0]
 print(torch.mean(torch.abs(fHat_grad - fHat_grad2) ** 2))

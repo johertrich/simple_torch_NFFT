@@ -219,7 +219,7 @@ def test(N, J, batch_x, batch_f, runs=1):
         print("torch_nfft package forward:", toc)
 
 
-N = (2**6,2**6,2**6)
+N = (2**6, 2**6, 2**6)
 batch_x = 1
 batch_f = 1
 J = 1000000

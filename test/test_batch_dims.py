@@ -1,5 +1,4 @@
-from simple_torch_NFFT import NFFT, GaussWindow
-from simple_torch_NFFT.nfft import ndft_adjoint, ndft_forward
+from simple_torch_NFFT import NFFT, NDFT
 import torch
 import time
 import numpy as np
@@ -12,31 +11,6 @@ float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
 m = 4
 sigma = 2
-
-
-def brute_force_resolve_batches(x, inp, method):
-    if len(x.shape) == 2:
-        return method(x, inp)
-    if x.shape[0] > inp.shape[0]:
-        return torch.stack(
-            [
-                brute_force_resolve_batches(x[i], inp[0], method)
-                for i in range(x.shape[0])
-            ],
-            0,
-        )
-    if x.shape[0] < inp.shape[0]:
-        return torch.stack(
-            [
-                brute_force_resolve_batches(x[0], inp[i], method)
-                for i in range(inp.shape[0])
-            ],
-            0,
-        )
-    return torch.stack(
-        [brute_force_resolve_batches(x[i], inp[i], method) for i in range(x.shape[0])],
-        0,
-    )
 
 
 def rand_batch_shapes(max_len=3, max_size=5):
@@ -74,6 +48,7 @@ def test(N, J, batch_dims_x, batch_dims_f):
 
     # init nfft
     nfft = NFFT(N, m=m, sigma=sigma, device=device, no_compile=True)
+    ndft = NDFT(N)
 
     #################################
     ###### Test adjoint... ##########
@@ -87,7 +62,7 @@ def test(N, J, batch_dims_x, batch_dims_f):
     # compute NFFT
     fHat = nfft.adjoint(x, f)
     # comparison with NDFT
-    fHat_dft = brute_force_resolve_batches(x, f, lambda x, f: ndft_adjoint(x, f, N))
+    fHat_dft = ndft.adjoint(x, f)
 
     # relative error
     rel_err = torch.sqrt(
@@ -109,7 +84,7 @@ def test(N, J, batch_dims_x, batch_dims_f):
     f = nfft(x, fHat)
 
     # comparison with NDFT
-    f_dft = brute_force_resolve_batches(x, fHat, ndft_forward)
+    f_dft = ndft(x, fHat)
 
     # relative error
     rel_err = torch.sqrt(
