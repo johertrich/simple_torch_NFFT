@@ -74,23 +74,15 @@ class NFFT(torch.nn.Module):
             np.prod([self.n[i] + 2 * self.m for i in range(len(self.n))])
         )
         if window is None:
-            self.window = KaiserBesselWindow(
-                self.n,
-                self.N,
-                self.m,
-                tuple([self.n[i] / self.N[i] for i in range(len(self.N))]),
-                device=device,
-                float_type=self.float_type,
-            )
-        else:
-            self.window = window(
-                self.n,
-                self.N,
-                self.m,
-                tuple([self.n[i] / self.N[i] for i in range(len(self.N))]),
-                device=device,
-                float_type=self.float_type,
-            )
+            self.window = KaiserBesselWindow
+        self.window = self.window(
+            self.n,
+            self.N,
+            self.m,
+            tuple([self.n[i] / self.N[i] for i in range(len(self.N))]),
+            device=device,
+            float_type=self.float_type,
+        )
         if no_compile or never_compile:
             if never_compile:
                 warnings.warn(

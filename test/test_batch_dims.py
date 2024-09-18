@@ -47,7 +47,7 @@ def test(N, J, batch_dims_x, batch_dims_f):
     # ft_grid = torch.arange(-N[0] // 2, N[0] // 2, dtype=float_type, device=device)
 
     # init nfft
-    nfft = NFFT(N, m=m, sigma=sigma, device=device, no_compile=True)
+    nfft = NFFT(N, m=m, sigma=sigma, device=device)
     ndft = NDFT(N)
 
     #################################
@@ -57,7 +57,6 @@ def test(N, J, batch_dims_x, batch_dims_f):
     # test data
     f_shape = batch_dims_f + [J]
     f = torch.randn(f_shape, dtype=complex_type, device=device)
-    print(x.shape, f.shape)
 
     # compute NFFT
     fHat = nfft.adjoint(x, f)
