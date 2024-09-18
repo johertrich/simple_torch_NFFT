@@ -40,7 +40,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 double_precision = False
 float_type = torch.float64 if double_precision else torch.float32
 complex_type = torch.complex128 if double_precision else torch.complex64
-m = 3
+m = 2
 sigma = 2
 
 # for gpu testing
@@ -118,6 +118,7 @@ def nfft3_adjoint(plan, x, f):
 
 def run_test(method, runs):
     sync()
+    time.sleep(0.5)
     tic = time.time()
     for _ in range(runs):
         res = method()
@@ -143,9 +144,14 @@ def test(N, J, batch_x, batch_f, runs=1):
     if nfft3_comparison:
         plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), J, m=m)
     if tkbn_comparison:
-        # we use window size=2*m, torchkbnufft window size = numpoints # stimmt das???
-        tkbn_obj = tkbn.KbNufft(im_size=N, numpoints=2 * m)
-        tkbn_adj = tkbn.KbNufftAdjoint(im_size=N, numpoints=2 * m)
+        # we use window size=2*m, torchkbnufft window size = numpoints # table_oversampl is required that large to achieve
+        # a small relative error...
+        tkbn_obj = tkbn.KbNufft(im_size=N, numpoints=2 * m, table_oversamp=2**18).to(
+            device
+        )
+        tkbn_adj = tkbn.KbNufftAdjoint(
+            im_size=N, numpoints=2 * m, table_oversamp=2**18
+        ).to(device)
         x_kb = 2 * torch.pi * x.clone()
         x_kb = x_kb.squeeze(1)
         x_kb = x_kb.transpose(-2, -1)
@@ -174,36 +180,25 @@ def test(N, J, batch_x, batch_f, runs=1):
     # compile
     out = nfft(x, fHat)
     out_adj = nfft.adjoint(x, f)
+
     batched_nfft(nfft, x, fHat)
     batched_nfft(nfft.adjoint, x, f)
     if tkbn_comparison:
-        # this should be in a different test file... This is only for runtime comparison
+        # we use window size=2*m, torchkbnufft window size = numpoints, therefore we set numpoints=2*m
         out_kb = tkbn_obj(fHat, x_kb)
-        print(
-            "Relative forward difference to torchkbnufft:",
-            torch.sqrt(
-                torch.sum(torch.abs(out_kb - out) ** 2) / torch.sum(torch.abs(out) ** 2)
-            ).item(),
-        )
         out_kb_adj = tkbn_adj(f, x_kb)
-        print(
-            "Relative adjoint difference to torchkbnufft:",
-            torch.sqrt(
-                torch.sum(torch.abs(out_kb_adj - out_adj) ** 2)
-                / torch.sum(torch.abs(out_adj) ** 2)
-            ).item(),
-        )
 
     # runtime forward
     _, toc = run_test(lambda: nfft(x, fHat), runs)
     print("Simple forward:", toc)
     _, toc = run_test(lambda: batched_nfft(nfft, x, fHat), runs)
     print("Batched forward:", toc)
-    _, toc = run_test(lambda: nfft3_forward(plan, x_cpu, fHat_cpu), runs)
-    print("NFFT3 forward:", toc)
     if tkbn_comparison:
         _, toc = run_test(lambda: tkbn_obj(fHat, x_kb), runs)
         print("Torchkbnufft forward:", toc)
+    if nfft3_comparison:
+        _, toc = run_test(lambda: nfft3_forward(plan, x_cpu, fHat_cpu), runs)
+        print("NFFT3 forward:", toc)
     if torch_nfft_comparison:
         _, toc = run_test(lambda: torch_nfft(x, fHat), runs)
         print("torch_nfft package forward:", toc)
@@ -213,20 +208,21 @@ def test(N, J, batch_x, batch_f, runs=1):
     print("Simple adjoint:", toc)
     _, toc = run_test(lambda: batched_nfft(nfft.adjoint, x, f), runs)
     print("Batched adjoint:", toc)
-    _, toc = run_test(lambda: nfft3_adjoint(plan, x_cpu, f_cpu), runs)
-    print("NFFT3 adjoint:", toc)
     if tkbn_comparison:
         _, toc = run_test(lambda: tkbn_adj(f, x_kb), runs)
         print("Torchkbnufft adjoint:", toc)
+    if nfft3_comparison:
+        _, toc = run_test(lambda: nfft3_adjoint(plan, x_cpu, f_cpu), runs)
+        print("NFFT3 adjoint:", toc)
     if torch_nfft_comparison:
         _, toc = run_test(lambda: torch_nfft_adjoint(x, f, N), runs)
         print("torch_nfft package forward:", toc)
 
 
-N = (2**6, 2**6)
+N = (2**6,2**6,2**6)
 batch_x = 1
 batch_f = 1
-J = 100000
-runs = 1
+J = 1000000
+runs = 10
 
 test(N, J, batch_x, batch_f, runs=runs)
