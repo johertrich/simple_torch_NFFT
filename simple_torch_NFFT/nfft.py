@@ -22,9 +22,10 @@ class LinearAutograd(torch.autograd.Function):
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        x, _, forward, adjoint = inputs
+        x, inp, forward, adjoint = inputs
         ctx.adjoint = adjoint
         ctx.forward = forward
+        ctx.input_shape = inp.shape
         ctx.save_for_backward(x)
 
     @staticmethod
@@ -32,6 +33,11 @@ class LinearAutograd(torch.autograd.Function):
         (x,) = ctx.saved_tensors
         if ctx.needs_input_grad[1]:
             grad_inp = LinearAutograd.apply(x, grad_output, ctx.adjoint, ctx.forward)
+            collapse_dims = tuple(
+                [i for i in range(len(ctx.input_shape)) if ctx.input_shape[i] == 1]
+            )
+            if len(collapse_dims) > 0:
+                grad_inp = torch.sum(grad_inp, collapse_dims, keepdims=True)
         return None, grad_inp, None, None
 
 
