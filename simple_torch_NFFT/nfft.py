@@ -55,14 +55,12 @@ class LinearAutograd(torch.autograd.Function):
             ]
             ).reshape(add_shape)
             perm=[len(add_shape)-1]+list(range(len(add_shape)-1))
-            print(inds)
             inds=inds.permute(perm)
             x_mod=x.unsqueeze(0)
             f_hat_mod=-2j*torch.pi*inds*inp.unsqueeze(0)
-            print(f_hat_mod.shape)
             grad_x=LinearAutograd.apply(x_mod, f_hat_mod, ctx.forward, ctx.adjoint)
             perm=list(range(1,len(grad_x.shape)))+[0]
-            grad_x=grad_x.permute(perm)
+            grad_x=grad_x.permute(perm).conj()*grad_output.unsqueeze(-1)
             collapse_dims = tuple(
                 [i for i in range(len(x.shape)) if x.shape[i] == 1]
             )
