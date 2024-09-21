@@ -2,8 +2,7 @@
 
 This repository contains a very simple implementation of the non-equispaced fast Fourier transform (NFFT)
 implemented directly in PyTorch for arbitrary dimensions. It runs on a GPU, supports autograd (wrt both, function values and basis points)
-and allows batching. The implementation was some kind of small exercise for myself, but actually it works
-very well.
+and allows batching. 
 
 ## Requirements
 
@@ -62,7 +61,7 @@ where `...` refers to the batch dimensions. For calling `forward(x,f_hat)` (or `
 have to be equal or broadcastable. The entries of `f_hat` always start with the negative index `-N/2`, so you want to start with
 zero you have to use `torch.fft.ifftshift`.
 
-Forward and adjoint NFFT will be compiled at the first call.
+Forward and adjoint NFFT will be compiled at the first call, despite you pass `no_compile=True` to the constructor.
 
 
 ### Example
@@ -105,15 +104,19 @@ f_hat = nfft.adjoint(x, f)
 
 ```
 
-## Performance Comments
+## Comments
+
+I wrote this implementation as some kind of exercise for myself, but actually it works very well.
+
+### Performance Comments
 
 - Compared to other libraries the run time might be a little bit more sensitive towards the window size `m`.
 - In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions are computed during initialization of the NFFT object. This might be a disadvantage if one often computes the NFFT with the same basis points.
 
-## Issues that I am Aware of
+### Issues that I am Aware of
 
-- so far only autograd wrt f/f_hat not wrt basis points (for grad wrt basis points set `grad_via_adjoint=False`, but this is much slower)
-- There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
+- There is an issue with `torch.compile` if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
+- `torch.compile` throws a couple of warnings on the GPU. But finally, it works...
 
 ## Other Libraries
 
