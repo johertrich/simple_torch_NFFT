@@ -14,62 +14,89 @@ if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     never_compile = True
 
 
-# Autograd Wrapper for linear functions
+# Autograd Wrapper for the NFFT
 class LinearAutograd(torch.autograd.Function):
     @staticmethod
-    def forward(x, inp, forward, adjoint):
+    def forward(x, inp, forward, adjoint, is_forward):
         return forward(x, inp)
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        x, inp, forward, adjoint = inputs
+        x, inp, forward, adjoint, is_forward = inputs
         ctx.adjoint = adjoint
         ctx.forward = forward
-        ctx.save_for_backward(x,inp)
+        ctx.is_forward = is_forward
+        ctx.save_for_backward(x, inp)
 
     @staticmethod
     def backward(ctx, grad_output):
-        (x,inp) = ctx.saved_tensors
+        (x, inp) = ctx.saved_tensors
         if ctx.needs_input_grad[1]:
-            grad_inp = LinearAutograd.apply(x, grad_output, ctx.adjoint, ctx.forward)
+            grad_inp = LinearAutograd.apply(
+                x, grad_output, ctx.adjoint, ctx.forward, not ctx.is_forward
+            )
             collapse_dims = tuple(
                 [i for i in range(len(inp.shape)) if inp.shape[i] == 1]
             )
             if len(collapse_dims) > 0:
                 grad_inp = torch.sum(grad_inp, collapse_dims, keepdims=True)
         else:
-            grad_inp=None
-        if ctx.needs_input_grad[0]:
+            grad_inp = None
+        if ctx.needs_input_grad[0] and ctx.is_forward:
             # grad wrt x is again a forward NFFT
             # nur fuer forward!!!
-            # stimmt noch nicht!!!
-            d=x.shape[-1]
-            N=inp.shape[-d:]
-            add_shape=[1 for _ in range(len(inp.shape)-len(N))]+list(N)+[-1]
+            d = x.shape[-1]
+            N = inp.shape[-d:]
+            add_shape = [1 for _ in range(len(inp.shape) - len(N))] + list(N) + [-1]
             inds = torch.cartesian_prod(
-            *[
-                torch.arange(
-                    -N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device
-                )
-                for i in range(len(N))
-            ]
+                *[
+                    torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device)
+                    for i in range(len(N))
+                ]
             ).reshape(add_shape)
-            perm=[len(add_shape)-1]+list(range(len(add_shape)-1))
-            inds=inds.permute(perm)
-            x_mod=x.unsqueeze(0)
-            f_hat_mod=-2j*torch.pi*inds*inp.unsqueeze(0)
-            grad_x=LinearAutograd.apply(x_mod, f_hat_mod, ctx.forward, ctx.adjoint)
-            perm=list(range(1,len(grad_x.shape)))+[0]
-            grad_x=grad_x.permute(perm).conj()*grad_output.unsqueeze(-1)
-            collapse_dims = tuple(
-                [i for i in range(len(x.shape)) if x.shape[i] == 1]
+            perm = [len(add_shape) - 1] + list(range(len(add_shape) - 1))
+            inds = inds.permute(perm)
+            x_mod = x.unsqueeze(0)
+            f_hat_mod = -2j * torch.pi * inds * inp.unsqueeze(0)
+            grad_x = LinearAutograd.apply(
+                x_mod, f_hat_mod, ctx.forward, ctx.adjoint, ctx.is_forward
             )
+            perm = list(range(1, len(grad_x.shape))) + [0]
+            grad_x = grad_x.permute(perm).conj() * grad_output.unsqueeze(-1)
+            collapse_dims = tuple([i for i in range(len(x.shape)) if x.shape[i] == 1])
             if len(collapse_dims) > 0:
                 grad_x = torch.sum(grad_x, collapse_dims, keepdims=True)
-            grad_x=torch.real(grad_x)
+            grad_x = torch.real(grad_x)
+        elif ctx.needs_input_grad[0]:
+            # grad wrt x is again a forward NFFT
+            # nur fuer adjoint!!!
+            d = x.shape[-1]
+            N = grad_output.shape[-d:]
+            add_shape = (
+                [1 for _ in range(len(grad_output.shape) - len(N))] + list(N) + [-1]
+            )
+            inds = torch.cartesian_prod(
+                *[
+                    torch.arange(-N[i] // 2, N[i] // 2, dtype=x.dtype, device=x.device)
+                    for i in range(len(N))
+                ]
+            ).reshape(add_shape)
+            perm = [len(add_shape) - 1] + list(range(len(add_shape) - 1))
+            inds = inds.permute(perm)
+            x_mod = x.unsqueeze(0)
+            f_hat_mod = -2j * torch.pi * inds * grad_output.unsqueeze(0)
+            grad_x = LinearAutograd.apply(
+                x_mod, f_hat_mod, ctx.adjoint, ctx.forward, not ctx.is_forward
+            )
+            perm = list(range(1, len(grad_x.shape))) + [0]
+            grad_x = grad_x.permute(perm).conj() * inp.unsqueeze(-1)
+            collapse_dims = tuple([i for i in range(len(x.shape)) if x.shape[i] == 1])
+            if len(collapse_dims) > 0:
+                grad_x = torch.sum(grad_x, collapse_dims, keepdims=True)
+            grad_x = torch.real(grad_x)
         else:
-            grad_x=None
-        return grad_x, grad_inp, None, None
+            grad_x = None
+        return grad_x, grad_inp, None, None, None
 
 
 class NFFT(torch.nn.Module):
@@ -154,7 +181,7 @@ class NFFT(torch.nn.Module):
         # apply NFFT
         if self.grad_via_adjoint:
             return LinearAutograd.apply(
-                x, f_hat, self.apply_forward, self.apply_adjoint
+                x, f_hat, self.apply_forward, self.apply_adjoint, True
             )
         else:
             return self.apply_forward(x, f_hat)
@@ -170,6 +197,8 @@ class NFFT(torch.nn.Module):
 
         # apply NFFT
         if self.grad_via_adjoint:
-            return LinearAutograd.apply(x, f, self.apply_adjoint, self.apply_forward)
+            return LinearAutograd.apply(
+                x, f, self.apply_adjoint, self.apply_forward, False
+            )
         else:
             return self.apply_adjoint(x, f)
