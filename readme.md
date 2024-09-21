@@ -2,9 +2,8 @@
 
 This repository contains a very simple implementation of the non-equispaced fast Fourier transform (NFFT)
 implemented directly in PyTorch for arbitrary dimensions. It runs on a GPU, supports autograd (wrt both, function values and basis points)
-and allows batching.
-
-
+and allows batching. The implementation was some kind of small exercise for myself, but actually it works
+very well.
 
 ## Requirements
 
@@ -115,6 +114,31 @@ f_hat = nfft.adjoint(x, f)
 
 - so far only autograd wrt f/f_hat not wrt basis points (for grad wrt basis points set `grad_via_adjoint=False`, but this is much slower)
 - There is an issue with torch.compile if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
+
+## Other Libraries
+
+I am aware that there are various other NFFT libraries. You can find a list below (probably I missed some, feel free to point me to them).
+
+### CPU and GPU
+
+- [TorchKbNufft](https://github.com/mmuckley/torchkbnufft): high-level library written in PyTorch
+
+### CPU only
+
+- [pyNFFT3](https://github.com/NFFT/pyNFFT3): official wrapper for [NFFT3](https://www-user.tu-chemnitz.de/~potts/nfft/)
+- [pyNFFT](https://github.com/pyNFFT/pyNFFT): other (inofficial?) wrapper for [NFFT3](https://www-user.tu-chemnitz.de/~potts/nfft/)
+- [FINUFFT](https://github.com/flatironinstitute/finufft): written in C++ with python-wrapper, GPU-variant below
+
+### GPU only
+
+- [torch_nfft](https://github.com/dominikbuenger/torch_nfft): written in CUDA with python-wrapper
+- [cuFINUFFT](https://github.com/flatironinstitute/cufinufft/): written in CUDA/C++ with python-wrapper, CPU variant above
+
+### Tools and other Languages
+
+- [Bindings-NUFFT](https://github.com/albangossard/Bindings-NUFFT-pytorch): Collection of PyTorch bindings and autograd definitions for different NFFT libraries
+- [NFFT3](https://www-user.tu-chemnitz.de/~potts/nfft/): High performance library written in C, provides interfaces for [Python](https://github.com/NFFT/pyNFFT3) (see above), [Julia](https://github.com/NFFT/NFFT3.jl) and [Matlab](https://www-user.tu-chemnitz.de/~potts/nfft/download.php).
+- [NFFT.jl](https://github.com/JuliaMath/NFFT.jl): Julia Library with CUDA support
 
 
 ## Author
