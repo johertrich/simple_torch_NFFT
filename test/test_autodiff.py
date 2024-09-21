@@ -11,10 +11,10 @@ sigma = 2
 
 N = (2**10,)
 J = 20000
-batch_x = 1
-batch_f = 1
+batch_x = 2
+batch_f = 2
 
-nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision, no_compile=True)
+nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
 ndft = NDFT(N)
 
 x = (
@@ -33,7 +33,6 @@ x = (
 # test data
 fHat_shape = [batch_x, batch_f] + list(N)
 fHat = torch.randn(fHat_shape, dtype=complex_type, device=device)
-fHat=torch.real(fHat).to(complex_type)
 
 x.requires_grad_(True)
 
@@ -47,7 +46,29 @@ f_dft = ndft(x, fHat)
 loss_dft = torch.sum(torch.abs(f_dft))
 x_grad2 = torch.autograd.grad(loss_dft, x)[0]
 
-print(torch.mean(torch.abs(x_grad - x_grad2) ** 2)/torch.mean(torch.abs(x_grad2) ** 2))
+print(
+    torch.mean(torch.abs(x_grad - x_grad2) ** 2) / torch.mean(torch.abs(x_grad2) ** 2)
+)
+
+f = torch.randn((batch_x, batch_f, J), dtype=complex_type, device=device)
+
+# compute NFFT
+fHat = nfft.adjoint(x, f)
+loss = torch.sum(torch.abs(fHat))
+
+x_grad = torch.autograd.grad(loss, x)[0]
+
+
+# comparison with NDFT
+fHat_dft = ndft.adjoint(x, f)
+
+loss_dft = torch.sum(torch.abs(fHat_dft))
+
+x_grad2 = torch.autograd.grad(loss_dft, x)[0]
+
+print(
+    torch.mean(torch.abs(x_grad - x_grad2) ** 2) / torch.mean(torch.abs(x_grad2) ** 2)
+)
 
 ####################
 # grad wrt f/f_hat #
@@ -71,7 +92,9 @@ loss_dft = torch.sum(torch.abs(fHat_dft))
 
 f_grad2 = torch.autograd.grad(loss_dft, f)[0]
 
-print(torch.mean(torch.abs(f_grad - f_grad2) ** 2)/torch.mean(torch.abs(f_grad2) ** 2))
+print(
+    torch.mean(torch.abs(f_grad - f_grad2) ** 2) / torch.mean(torch.abs(f_grad2) ** 2)
+)
 
 fHat_shape = [batch_x, batch_f] + list(N)
 
@@ -89,6 +112,7 @@ f_dft = ndft(x, fHat)
 
 loss_dft = torch.sum(torch.abs(f_dft))
 fHat_grad2 = torch.autograd.grad(loss_dft, fHat)[0]
-print(torch.mean(torch.abs(fHat_grad - fHat_grad2) ** 2)/torch.mean(torch.abs(fHat_grad2) ** 2))
-
-
+print(
+    torch.mean(torch.abs(fHat_grad - fHat_grad2) ** 2)
+    / torch.mean(torch.abs(fHat_grad2) ** 2)
+)
