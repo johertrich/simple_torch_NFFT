@@ -7,7 +7,7 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
     # n is a tuple of even values
     # phi_conj is function handle
-    padded_size = torch.Size([np.prod([n[i] + 2 * m for i in range(len(n))])])
+    unpadded_size = torch.Size([np.prod([n[i] for i in range(len(n))])])
     window_shape = [-1] + [1 for _ in range(len(x.shape) - 1)] + [len(n)]
     window = torch.cartesian_prod(
         *[torch.arange(0, 2 * m, device=device, dtype=torch.int) for _ in range(len(n))]
@@ -22,76 +22,41 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
         * f[None]
     )
 
+    # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, % to prevent overflows
+    for i in range(len(n)):
+        inds[..., i] = (inds[..., i] + n[i] // 2) % n[i]
+
+    # linear indices for dimension axis
     cumprods = torch.cumprod(
-        torch.flip(torch.tensor(n, dtype=torch.int, device=device) + 2 * m, (0,)), 0
+        torch.flip(torch.tensor(n, dtype=torch.int, device=device), (0,)), 0
     )
     cumprods = cumprods[:-1]
     size_mults = torch.ones(len(n), dtype=torch.int, device=device)
     size_mults[1:] = cumprods
-    size_mults = torch.flip(size_mults, (0,))
-
-    # next term: +n//2 for index shift from -n/2 util n/2-1 to 0 until n-1, other part for linear indices
-    # +m and 2*m to prevent overflows around 1/2=-1/2
-    inds = inds + torch.tensor(
-        [n[i] // 2 + m for i in range(len(n))], dtype=torch.int, device=device
-    )
-
-    # handling dimensions
+    size_mults = torch.flip(size_mults, (0,))  # cumulated sizes of the dimensions
     inds = torch.sum(inds * size_mults, -1)
     inds_tile = [
         increments.shape[i] // inds.shape[i] for i in range(len(increments.shape))
     ]
     inds = inds.tile(inds_tile)
     inds = inds.view(increments.shape[0], -1, increments.shape[-1])
+
     # handling batch dimensions in linear indexing
     inds = (
         inds
-        + padded_size[0]
+        + unpadded_size[0]
         * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
     )
+
+    # index operations
     g_linear = torch.zeros(
-        padded_size[0] * inds.shape[1],
+        unpadded_size[0] * inds.shape[1],
         device=device,
         dtype=increments.dtype,
     )
-
     g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
-    g_shape = list(increments.shape[1:-1]) + [n[i] + 2 * m for i in range(len(n))]
+    g_shape = list(increments.shape[1:-1]) + [n[i] for i in range(len(n))]
     g = g_linear.view(g_shape)
-
-    # handle overflows
-    if len(n) <= 4:
-        g[..., -2 * m : -m] += g[..., :m]
-        g[..., m : 2 * m] += g[..., -m:]
-        g = g[..., m:-m]
-        if len(n) >= 2:
-            g[..., -2 * m : -m, :] += g[..., :m, :]
-            g[..., m : 2 * m, :] += g[..., -m:, :]
-            g = g[..., m:-m, :]
-        if len(n) == 3:
-            g[..., -2 * m : -m, :, :] += g[..., :m, :, :]
-            g[..., m : 2 * m, :, :] += g[..., -m:, :, :]
-            g = g[..., m:-m, :, :]
-        if len(n) == 4:
-            g[..., -2 * m : -m, :, :, :] += g[..., :m, :, :, :]
-            g[..., m : 2 * m, :, :, :] += g[..., -m:, :, :, :]
-            g = g[..., m:-m, :, :, :]
-    else:
-        # if someone is crazy enough (and has time and resources) for trying an NFFT in >3 dimensions.
-        # Currently throws errors with torch.compile, but eager execution works,
-        # but since NFFTs in d>4 are likely to be intractable anyway, I won't invest effort to fix that...
-        for i in range(len(n)):
-            g.index_add_(
-                len(g) - len(n) + i,
-                torch.arange(n[i], n[i] + m, dtype=torch.int, device=device),
-                torch.narrow(g, len(g) - len(n) + i, 0, m).clone(),
-            )
-            g.index_add_(
-                len(g) - len(n) + i,
-                torch.arange(m, 2 * m, dtype=torch.int, device=device),
-                torch.narrow(g, len(g) - len(n) + i, n[i] + m, m).clone(),
-            )
-            g = torch.narrow(g, len(g) - len(n) + i, m, n[i])
     return g
 
 
@@ -139,6 +104,7 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     for i in range(len(n)):
         inds[..., i] = (inds[..., i] + n[i] // 2) % n[i]
 
+    # handling dimensions
     cumprods = torch.cumprod(
         torch.flip(torch.tensor(n, dtype=torch.int, device=device), (0,)), 0
     )
@@ -147,7 +113,6 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     size_mults = torch.ones(len(n), dtype=torch.int, device=device)
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
-    # handling dimensions
     inds = torch.sum(inds * size_mults, -1)
     # tiling
     inds_tile = (
