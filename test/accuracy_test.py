@@ -142,40 +142,28 @@ def test(N, J, batch_x, batch_f):
         )
 
 
-dim = 2
-if dim == 1:
-    ##############################
-    print("Test for d=1")
-    ##############################
+# parameters
+J = 20000
+batch_x = 2
+batch_f = 2
 
-    N = (2**10,)
-    J = 20000
-    batch_x = 2
-    batch_f = 2
+##############################
+print("Test for d=1")
+##############################
 
-    test(N, J, batch_x, batch_f)
+N = (2**10,)
+test(N, J, batch_x, batch_f)
 
-if dim == 2:
-    ##############################
-    print("Test for d=2")
-    ##############################
+##############################
+print("Test for d=2")
+##############################
 
-    N = (2**5, 2**5)
-    J = 20000
-    batch_x = 2
-    batch_f = 2
+N = (2**5, 2**5)
+test(N, J, batch_x, batch_f)
 
-    test(N, J, batch_x, batch_f)
+##############################
+print("Test for d=3")
+##############################
 
-
-if dim == 3:
-    ##############################
-    print("Test for d=3")
-    ##############################
-
-    N = (2**4, 2**4, 2**4)
-    J = 20000
-    batch_x = 2
-    batch_f = 2
-
-    test(N, J, batch_x, batch_f)
+N = (2**4, 2**4, 2**4)
+test(N, J, batch_x, batch_f)
