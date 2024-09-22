@@ -112,11 +112,11 @@ I wrote this implementation as some kind of exercise for myself, but actually it
 
 - Compared to other libraries the run time might be a little bit more sensitive towards the window size `m`.
 - In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions are computed during initialization of the NFFT object. This might be a disadvantage if one often computes the NFFT with the same basis points.
+- While the implementation was (in my not very sophisticated runtime tests) in general faster than torchkbnufft, it seems to parallelize  worse wrt `f` and `f_hat`, but better wrt `x`.
 
 ### Issues that I am Aware of
 
-- There is an issue with `torch.compile` if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
-- `torch.compile` throws a couple of warnings on the GPU. But finally, it works...
+- `torch.compile` throws a couple of warnings on the GPU. But it works...
 
 ## Other Libraries
 
