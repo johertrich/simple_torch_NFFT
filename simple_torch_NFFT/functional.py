@@ -35,28 +35,39 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))  # cumulated sizes of the dimensions
     inds = torch.sum(inds * size_mults, -1)
-    inds_tile = [
-        increments.shape[i] // inds.shape[i] for i in range(len(increments.shape))
-    ]
-    inds = inds.tile(inds_tile)
-    inds = inds.view(increments.shape[0], -1, increments.shape[-1])
 
-    # handling batch dimensions in linear indexing
-    inds = (
-        inds
-        + unpadded_size[0]
-        * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
-    )
+    if True:
+        batches=torch.cartesian_prod(*[torch.arange(0,increments.shape[i],dtype=torch.int,device=device) for i in range(1,len(increments.shape)-1)])
+        batches_ind=batches.clone()
+        batches_ind[:,torch.tensor(inds.shape[1:-1],dtype=torch.int,device=device)==1]=0
+        g_lins=[torch.zeros(unpadded_size[0],dtype=increments.dtype,device=device) for _ in range(batches.shape[0])]
+        g_lins=[g_lins[i].index_put_((inds[:,*batches_ind[i],:],),increments[:,*batches[i],:],accumulate=True) for i in range(batches.shape[0])]
+        g_lins=torch.stack(g_lins,0)
+        g_shape = list(increments.shape[1:-1]) + [n[i] for i in range(len(n))]
+        g = g_lins.view(g_shape)
+    else:    
+        inds_tile = [
+            increments.shape[i] // inds.shape[i] for i in range(len(increments.shape))
+        ]
+        inds = inds.tile(inds_tile)
+        inds = inds.view(increments.shape[0], -1, increments.shape[-1])
 
-    # index operations
-    g_linear = torch.zeros(
-        unpadded_size[0] * inds.shape[1],
-        device=device,
-        dtype=increments.dtype,
-    )
-    g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
-    g_shape = list(increments.shape[1:-1]) + [n[i] for i in range(len(n))]
-    g = g_linear.view(g_shape)
+        # handling batch dimensions in linear indexing
+        inds = (
+            inds
+            + unpadded_size[0]
+            * torch.arange(0, inds.shape[1], device=device, dtype=torch.int)[None, :, None]
+        )
+
+        # index operations
+        g_linear = torch.zeros(
+            unpadded_size[0] * inds.shape[1],
+            device=device,
+            dtype=increments.dtype,
+        )
+        g_linear.index_put_((inds.view(-1),), increments.view(-1), accumulate=True)
+        g_shape = list(increments.shape[1:-1]) + [n[i] for i in range(len(n))]
+        g = g_linear.view(g_shape)
     return g
 
 
@@ -114,6 +125,7 @@ def sparse_convolution(x, g, n, m, M, phi, device):
     size_mults[1:] = cumprods
     size_mults = torch.flip(size_mults, (0,))
     inds = torch.sum(inds * size_mults, -1)
+
     # tiling
     inds_tile = (
         [1]
