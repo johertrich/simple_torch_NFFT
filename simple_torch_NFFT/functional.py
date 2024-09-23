@@ -3,8 +3,8 @@ import numpy as np
 
 
 def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
-    # x is four-dimensional: batch_x times 1 times #basis points times dimension
-    # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
+    # x has batch dimension plus two more dimensions of size #basis points times dimension
+    # f has batch dimension plus one more dimension of size #basis_points
     # n is a tuple of even values
     # phi_conj is function handle
     unpadded_size = torch.Size([np.prod([n[i] for i in range(len(n))])])
@@ -61,8 +61,8 @@ def transposed_sparse_convolution(x, f, n, m, phi_conj, device):
 
 
 def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
-    # x is four-dimensional: batch_x times 1 times #basis points times dimension
-    # f is three-dimesnional: (1 or batch_x) times batch_f times #basis_points
+    # x has batch dimension plus two more dimensions of size #basis points times dimension
+    # f has batch dimension plus one more dimension of size #basis_points
     # n is a tuple of even values
     # phi_conj is function handle
     # N is a tuple of even values
@@ -86,7 +86,7 @@ def adjoint_nfft(x, f, N, n, m, phi_conj, phi_hat, device):
 
 
 def sparse_convolution(x, g, n, m, M, phi, device):
-    # x is four-dimensional: batch_x times 1 times #basis points times dimension
+    # x has batch dimension plus two more dimensions of size #basis points times dimension
     # g lives on (discretized) [-1/2,1/2)^d
     # n is a tuple of even values
     # phi is function handle
@@ -145,8 +145,8 @@ def sparse_convolution(x, g, n, m, M, phi, device):
 
 
 def forward_nfft(x, f_hat, N, n, m, phi, phi_hat, device):
-    # x is four-dimensional: batch_x times 1 times #basis points times dimension
-    # f_hat has size (batch_x,batch_f,N_1,...,N_d)
+    # x has batch dimension plus two more dimensions of size #basis points times dimension
+    # f_hat has batch dimension plus d more dimensions of size N=(N_1,...,N_d)
     # n is tuple of even values
     # phi is function handle
     # N is a tuple of even values
