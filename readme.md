@@ -130,7 +130,7 @@ We always use the input shape `(batch_x,1,M,d)` for `x`, `(batch_x,batch_f,M)` f
 We use `N=4096`. Then the execution times (seconds) for 10 the forward NFFT were the following.
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.00226 | 0.00113 | 0.00140 | 0.00078 |
 | `batch_x=1`, `batch_f=10` | 0.00505 | 0.00108 | 0.00333 | 0.00096 |
 | `batch_x=10`, `batch_f=1` | 0.01340 | 0.00447 | 0.00346 | 0.00085 |
@@ -139,7 +139,7 @@ We use `N=4096`. Then the execution times (seconds) for 10 the forward NFFT were
 For the adjoint NFFT, we obtain the following execution times
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.00289 | 0.00270 | 0.00156 | 0.00091 |
 | `batch_x=1`, `batch_f=10` | 0.01650 | 0.00289 | 0.00325 | 0.00183 |
 | `batch_x=10`, `batch_f=1` | 0.02491 | 0.00613 | 0.00310 | 0.00183 |
@@ -150,7 +150,7 @@ For the adjoint NFFT, we obtain the following execution times
 We use `N=(N_1,N_2)=(256,256)`. Then the execution times (seconds) for the forward NFFT were the following.
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.00489 | 0.00237 | 0.00257 | 0.00092 |
 | `batch_x=1`, `batch_f=10` | 0.02079 | 0.00263 | 0.00973 | 0.00168 |
 | `batch_x=10`, `batch_f=1` | 0.07189 | 0.01557 | 0.01020 | 0.00240 |
@@ -159,7 +159,7 @@ We use `N=(N_1,N_2)=(256,256)`. Then the execution times (seconds) for the forwa
 For the adjoint NFFT, we obtain the following execution times
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.00491 | 0.00502 | 0.00223 | 0.00117 |
 | `batch_x=1`, `batch_f=10` | 0.02924 | 0.00649 | 0.00893 | 0.00725 |
 | `batch_x=10`, `batch_f=1` | 0.07695 | 0.02437 | 0.00950 | 0.00791 |
@@ -172,7 +172,7 @@ We use `N=(N_1,N_2,N_3)=(128,128,128)`. For `batch_x=batch_f=10`, we got an memo
 Then the execution times (seconds) for the forward NFFT were the following.
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.03677 | 0.00888 | 0.01297 | 0.00458 |
 | `batch_x=1`, `batch_f=10` | 0.27084 | 0.02778 | 0.06780 | 0.04576 |
 | `batch_x=10`, `batch_f=1` | 0.30655 | 0.08501 | 0.06860 | 0.04744 |
@@ -180,7 +180,7 @@ Then the execution times (seconds) for the forward NFFT were the following.
 For the adjoint NFFT, we obtain the following execution times
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
-| --- | --- | --- | --- | --- |
+| :---: | :---: | :---: | :---: | :---: |
 | `batch_x=1`, `batch_f=1` | 0.04423 | 0.01856 | 0.00950 | 0.00675 |
 | `batch_x=1`, `batch_f=10` | 0.34766 | 0.04173 | 0.10051 | 0.06409 |
 | `batch_x=10`, `batch_f=1` | 0.38263 | 0.11934 | 0.10062 | 0.06685 |
