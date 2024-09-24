@@ -153,7 +153,7 @@ We use `N=(N_1,N_2)=(256,256)`. Then the execution times (seconds) for the forwa
 | --- | --- | --- | --- | --- |
 | `batch_x=1`, `batch_f=1` | 0.00489 | 0.00237 | 0.00257 | 0.00092 |
 | `batch_x=1`, `batch_f=10` | 0.02079 | 0.00263 | 0.00973 | 0.00168 |
-| `batch_x=10`, `batch_f=1` | 0.07189 | 0.01557 |  0.01020| 0.00240 |
+| `batch_x=10`, `batch_f=1` | 0.07189 | 0.01557 | 0.01020 | 0.00240 |
 | `batch_x=10`, `batch_f=10` | 0.21706 | 0.02359 | 0.06724 | 0.01905 |
 
 For the adjoint NFFT, we obtain the following execution times
@@ -164,6 +164,26 @@ For the adjoint NFFT, we obtain the following execution times
 | `batch_x=1`, `batch_f=10` | 0.02924 | 0.00649 | 0.00893 | 0.00725 |
 | `batch_x=10`, `batch_f=1` | 0.07695 | 0.02437 | 0.00950 | 0.00791 |
 | `batch_x=10`, `batch_f=10` | 0.30029 | 0.03246 | 0.06537 | 0.07389 |
+
+#### Three-dimensional NFFT
+
+We use `N=(N_1,N_2,N_3)=(128,128,128)`. For `batch_x=batch_f=10`, we got an memory error on the GPU 
+(should not be surprising when trying to perform 100 three-dimensional NFFTs in parallel).
+Then the execution times (seconds) for the forward NFFT were the following.
+
+| batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
+| --- | --- | --- | --- | --- |
+| `batch_x=1`, `batch_f=1` | 0.03677 | 0.00888 | 0.01297 | 0.00458 |
+| `batch_x=1`, `batch_f=10` | 0.27084 | 0.02778 | 0.06780 | 0.04576 |
+| `batch_x=10`, `batch_f=1` | 0.30655 | 0.08501 | 0.06860 | 0.04744 |
+
+For the adjoint NFFT, we obtain the following execution times
+
+| batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
+| --- | --- | --- | --- | --- |
+| `batch_x=1`, `batch_f=1` | 0.04423 | 0.01856 | 0.00950 | 0.00675 |
+| `batch_x=1`, `batch_f=10` | 0.34766 | 0.04173 | 0.10051 | 0.06409 |
+| `batch_x=10`, `batch_f=1` | 0.38263 | 0.11934 | 0.10062 | 0.06685 |
 
 ### Issues that I am Aware of
 
