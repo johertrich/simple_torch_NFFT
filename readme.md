@@ -153,7 +153,7 @@ If you find it usefull, please consider to cite
 ```
 @article{HJQ2024,
   title={Fast Summation of Radial Kernels via {QMC} Slicing},
-  author={Hertrich, Johannes and Jahn, Tim, and Quellmalz Michael},
+  author={Hertrich, Johannes and Jahn, Tim, and Quellmalz, Michael},
   journal={arXiv preprint arXiv:xxxx.xxxxx},
   year={2024}
 }
@@ -163,7 +163,7 @@ or
 
 ```
 @article{H2024,
-  title={Fast kernel summation in high dimensions via slicing and {F}ourier transforms},
+  title={Fast Kernel Summation in High Dimensions via Slicing and {F}ourier transforms},
   author={Hertrich, Johannes},
   journal={SIAM Journal on Mathematics of Data Science, to appear},
   year={2024}
