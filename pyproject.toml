@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "simple_torch_NFFT"
 version = "0.1.0"
-description = "Very simple but vectorized torch implementation of the NFFT"
+description = "Simple but vectorized torch implementation of the NFFT"
 authors = [{ name = "Johannes Hertrich", email = "j.hertrich@ucl.ac.uk" }]
 license = { text = "MIT" }
 readme = "readme.md"

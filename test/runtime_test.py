@@ -65,6 +65,27 @@ def batched_nfft(nfft_fun, points, inp):
     )
 
 
+def rand_like(x):
+    return (
+        torch.rand_like(x)
+        if isinstance(x, torch.Tensor)
+        else np.random.uniform(size=x.shape)
+    )
+
+
+def randn_like(x):
+    if isinstance(x, torch.Tensor):
+        return torch.randn_like(x)
+    elif x.dtype == np.complex128 or x.dtype == np.complex64:
+        out = np.random.normal(size=x.shape) + 1j * np.random.normal(size=x.shape)
+        return out.astype(x.dtype)
+    elif x.dtype == np.float32 or x.dtype == np.float64:
+        out = np.random.normal(size=x.shape)
+        return out.astype(x.dtype)
+    else:
+        raise ValueError("unknown input type")
+
+
 def torch_nfft(x, fHat):
     x = x.tile(1, fHat.shape[1], 1, 1)
     batch = torch.arange(x.shape[0] * x.shape[1], device=device).repeat_interleave(
@@ -116,33 +137,54 @@ def nfft3_adjoint(plan, x, f):
     return np.stack(outs, 0)
 
 
-def run_test(method, runs):
-    sync()
-    time.sleep(0.5)
-    tic = time.time()
-    for _ in range(runs):
-        res = method()
+def torchkbnufft_forward(tkbn_obj, x, fhat):
+    x_kb = 2 * torch.pi * x
+    x_kb = x_kb.squeeze(1)
+    x_kb = x_kb.transpose(-2, -1)
+    return tkbn_obj(fhat, x_kb)
+
+
+def torchkbnufft_adjoint(tkbn_adj, x, f):
+    x_kb = 2 * torch.pi * x
+    x_kb = x_kb.squeeze(1)
+    x_kb = x_kb.transpose(-2, -1)
+    return tkbn_adj(f, x_kb)
+
+
+def run_test(method, runs, x, inp):
+    toc_sum = 0
+    for run in range(runs + 2):
+        x = rand_like(x) - 0.5
+        inp = randn_like(inp)
         sync()
-    toc = time.time() - tic
-    return res, toc
+        time.sleep(0.5)
+        tic = time.time()
+        res = method(x, inp)
+        sync()
+        toc = time.time() - tic
+        # for some reasons torchkbnufft becomes faster after two runs.
+        if run <= 1:
+            continue
+        toc_sum += toc
+    return res, toc_sum
 
 
-def test(N, J, batch_x, batch_f, runs=1):
+def test(N, M, batch_x, batch_f, runs=1):
     x = (
         torch.rand(
-            (batch_x, 1, J, len(N)),
+            (batch_x, 1, M, len(N)),
             device=device,
             dtype=float_type,
         )
         - 0.5
     )
     x_cpu = x.detach().cpu().numpy().astype(np.float64)
-    x_cpu = np.ascontiguousarray(x_cpu.reshape(batch_x, J, len(N)))
+    x_cpu = np.ascontiguousarray(x_cpu.reshape(batch_x, M, len(N)))
 
     # init nfft
     nfft = NFFT(N, m=m, sigma=sigma, device=device, double_precision=double_precision)
     if nfft3_comparison:
-        plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), J, m=m)
+        plan = pyNFFT3.NFFT(np.array(N, dtype="int32"), M, m=m)
     if tkbn_comparison:
         # we use window size=2*m, torchkbnufft window size = numpoints # table_oversampl is required that large to achieve
         # a small relative error...
@@ -156,7 +198,7 @@ def test(N, J, batch_x, batch_f, runs=1):
         x_kb = x_kb.squeeze(1)
         x_kb = x_kb.transpose(-2, -1)
 
-    f = torch.randn((batch_x, batch_f, J), dtype=complex_type, device=device)
+    f = torch.randn((batch_x, batch_f, M), dtype=complex_type, device=device)
     fHat_shape = [batch_x, batch_f] + list(N)
     fHat = torch.randn(fHat_shape, dtype=complex_type, device=device)
     # for pyNFFT3
@@ -180,49 +222,57 @@ def test(N, J, batch_x, batch_f, runs=1):
     # compile
     out = nfft(x, fHat)
     out_adj = nfft.adjoint(x, f)
-
-    batched_nfft(nfft, x, fHat)
-    batched_nfft(nfft.adjoint, x, f)
+    batched_nfft(nfft, x, fHat.clone())
+    batched_nfft(nfft.adjoint, x, f.clone())
     if tkbn_comparison:
         # we use window size=2*m, torchkbnufft window size = numpoints, therefore we set numpoints=2*m
         out_kb = tkbn_obj(fHat, x_kb)
         out_kb_adj = tkbn_adj(f, x_kb)
 
     # runtime forward
-    _, toc = run_test(lambda: nfft(x, fHat), runs)
+    _, toc = run_test(lambda x, fHat: nfft(x, fHat), runs, x, fHat)
     print("Simple forward:", toc)
-    _, toc = run_test(lambda: batched_nfft(nfft, x, fHat), runs)
+    _, toc = run_test(lambda x, fHat: batched_nfft(nfft, x, fHat), runs, x, fHat)
     print("Batched forward:", toc)
     if tkbn_comparison:
-        _, toc = run_test(lambda: tkbn_obj(fHat, x_kb), runs)
+        _, toc = run_test(
+            lambda x, fHat: torchkbnufft_forward(tkbn_obj, x, fHat), runs, x, fHat
+        )
         print("Torchkbnufft forward:", toc)
     if nfft3_comparison:
-        _, toc = run_test(lambda: nfft3_forward(plan, x_cpu, fHat_cpu), runs)
+        _, toc = run_test(
+            lambda x, fHat: nfft3_forward(plan, x, fHat), runs, x_cpu, fHat_cpu
+        )
         print("NFFT3 forward:", toc)
     if torch_nfft_comparison:
-        _, toc = run_test(lambda: torch_nfft(x, fHat), runs)
+        _, toc = run_test(lambda x, fHat: torch_nfft(x, fHat), runs, x, fHat)
         print("torch_nfft package forward:", toc)
 
     # runtime adjoint
-    _, toc = run_test(lambda: nfft.adjoint(x, f), runs)
+    _, toc = run_test(lambda x, f: nfft.adjoint(x, f), runs, x, f)
     print("Simple adjoint:", toc)
-    _, toc = run_test(lambda: batched_nfft(nfft.adjoint, x, f), runs)
+    _, toc = run_test(lambda x, f: batched_nfft(nfft.adjoint, x, f), runs, x, f)
     print("Batched adjoint:", toc)
     if tkbn_comparison:
-        _, toc = run_test(lambda: tkbn_adj(f, x_kb), runs)
+        _, toc = run_test(lambda x, f: torchkbnufft_adjoint(tkbn_adj, x, f), runs, x, f)
         print("Torchkbnufft adjoint:", toc)
     if nfft3_comparison:
-        _, toc = run_test(lambda: nfft3_adjoint(plan, x_cpu, f_cpu), runs)
+        _, toc = run_test(lambda x, f: nfft3_adjoint(plan, x, f), runs, x_cpu, f_cpu)
         print("NFFT3 adjoint:", toc)
     if torch_nfft_comparison:
-        _, toc = run_test(lambda: torch_nfft_adjoint(x, f, N), runs)
+        _, toc = run_test(lambda x, f: torch_nfft_adjoint(x, f, N), runs, x, f)
         print("torch_nfft package forward:", toc)
 
 
-N = (2**6, 2**6, 2**6)
-batch_x = 1
-batch_f = 1
-J = 1000000
+M = 100000
 runs = 10
 
-test(N, J, batch_x, batch_f, runs=runs)
+
+print(f"all comparisons for M = {M} points of the non-equispaced grid")
+for N in [(2**12,), (2**8, 2**8), (2**7, 2**7, 2**7)]:
+    for batch_x in [1, 10]:
+        for batch_f in [1, 10]:
+            print(
+                f"\n\nTest runtime for N={N}, batch_x={batch_x} and batch_f={batch_f}"
+            )
+            test(N, M, batch_x, batch_f, runs=runs)

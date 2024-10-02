@@ -110,13 +110,14 @@ I wrote this implementation as some kind of exercise for myself, but actually it
 
 ### Performance Comments
 
+- A (very simple) runtime comparison with other libraries is available [here](runtime_comparison.md).
 - Compared to other libraries the run time might be a little bit more sensitive towards the window size `m`.
 - In contrast to other NFFT libraries there are almost no precomputations. Only the Fourier coefficients of the window functions are computed during initialization of the NFFT object. This might be a disadvantage if one often computes the NFFT with the same basis points.
+- parallelization of the adjoint wrt `f` and `f_hat` is poor at the moment. I will investigate why.
 
 ### Issues that I am Aware of
 
-- There is an issue with `torch.compile` if one creates two NFFT objects for different dimensions. Then the compile of the second one fails...
-- `torch.compile` throws a couple of warnings on the GPU. But finally, it works...
+- `torch.compile` throws a couple of warnings on the GPU. But it works...
 
 ## Other Libraries
 
@@ -146,4 +147,25 @@ I am aware that there are various other NFFT libraries. You can find a list belo
 
 ## Author
 
-[Johannes Hertrich](https://johertrich.github.io)
+This library was written by [Johannes Hertrich](https://johertrich.github.io) in the context of fast kernel summations via slicing.
+If you find it usefull, please consider to cite
+
+```
+@article{HJQ2024,
+  title={Fast Summation of Radial Kernels via {QMC} Slicing},
+  author={Hertrich, Johannes and Jahn, Tim, and Quellmalz, Michael},
+  journal={arXiv preprint arXiv:xxxx.xxxxx},
+  year={2024}
+}
+```
+
+or
+
+```
+@article{H2024,
+  title={Fast Kernel Summation in High Dimensions via Slicing and {F}ourier transforms},
+  author={Hertrich, Johannes},
+  journal={SIAM Journal on Mathematics of Data Science, to appear},
+  year={2024}
+}
+```

@@ -135,8 +135,8 @@ class NFFT(torch.nn.Module):
             self.forward_fun = forward_nfft
             self.adjoint_fun = adjoint_nfft
         else:
-            self.forward_fun = torch.compile(forward_nfft)
-            self.adjoint_fun = torch.compile(adjoint_nfft)
+            self.forward_fun = torch.compile(forward_nfft, dynamic=False)
+            self.adjoint_fun = torch.compile(adjoint_nfft, dynamic=False)
         self.grad_via_adjoint = grad_via_adjoint
 
     def apply_forward(self, x, f_hat):
