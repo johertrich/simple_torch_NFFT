@@ -153,8 +153,8 @@ If you find it usefull, please consider to cite
 ```
 @article{HJQ2024,
   title={Fast Summation of Radial Kernels via {QMC} Slicing},
-  author={Hertrich, Johannes and Jahn, Tim, and Quellmalz, Michael},
-  journal={arXiv preprint arXiv:xxxx.xxxxx},
+  author={Hertrich, Johannes and Jahn, Tim and Quellmalz, Michael},
+  journal={arXiv preprint arXiv:2410.01316},
   year={2024}
 }
 ```
