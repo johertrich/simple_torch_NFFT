@@ -13,6 +13,11 @@ if torch.__version__ < "2.4.0" and sys.version >= "3.12":
     )
     never_compile = True
 
+if torch.__version__ < "2.5.0":
+    warnings.warn(
+        "You are using a PyTorch version older than 2.5.0! In PyTorch 2.5 several improvements of torch.compile were added. Not sure, whether currently the compile works with older versions of PyTorch."
+    )
+
 
 # Autograd Wrapper for the NFFT
 class LinearAutograd(torch.autograd.Function):
