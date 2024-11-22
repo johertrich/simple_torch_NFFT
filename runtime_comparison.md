@@ -11,7 +11,7 @@ We always use the input shape `(batch_x,1,M,d)` for `x`, `(batch_x,batch_f,M)` f
 
 ## One-dimensional NFFT
 
-We use `N=4096`. Then the execution times (seconds) for 10 the forward NFFT were the following.
+We use `N=4096`. Then the execution times (seconds) the forward NFFT were the following.
 
 | batch sizes | pyNFFT3 (CPU) | TorchKbNufft | torch_nfft | simple_torch_NFFT |
 | :---: | :---: | :---: | :---: | :---: |

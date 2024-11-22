@@ -46,7 +46,7 @@ class Fastsum(torch.nn.Module):
 
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
-        self.x_range=x_range
+        self.x_range = x_range
 
     def get_xis(self, P, device):
         xis = torch.randn(P, self.dim, device=device)

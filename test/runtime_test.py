@@ -43,6 +43,9 @@ complex_type = torch.complex128 if double_precision else torch.complex64
 m = 2
 sigma = 2
 
+# we run the NFFT in plenty of settings, recompile is wanted.
+torch._dynamo.config.cache_size_limit = 1024
+
 # for gpu testing
 sync = (
     (lambda: torch.cuda.synchronize()) if torch.cuda.is_available() else (lambda: None)
@@ -166,7 +169,7 @@ def run_test(method, runs, x, inp):
         if run <= 1:
             continue
         toc_sum += toc
-    return res, toc_sum
+    return res, toc_sum / runs
 
 
 def test(N, M, batch_x, batch_f, runs=1):

@@ -135,19 +135,23 @@ class NFFT(torch.nn.Module):
             self.forward_fun = forward_nfft
             self.adjoint_fun = adjoint_nfft
         else:
-            self.forward_fun = torch.compile(forward_nfft, dynamic=False)
-            self.adjoint_fun = torch.compile(adjoint_nfft, dynamic=False)
+            self.forward_fun = torch.compile(
+                forward_nfft, dynamic=False, mode="max-autotune"
+            )
+            self.adjoint_fun = torch.compile(
+                adjoint_nfft, dynamic=False, mode="max-autotune"
+            )
         self.grad_via_adjoint = grad_via_adjoint
 
     def apply_forward(self, x, f_hat):
         return self.forward_fun(
             x, f_hat, self.N, self.n, self.m, self.window, self.window.ft, self.device
-        )
+        ).clone()
 
     def apply_adjoint(self, x, f):
         return self.adjoint_fun(
             x, f, self.N, self.n, self.m, self.window, self.window.ft, self.device
-        )
+        ).clone()
 
     def forward(self, x, f_hat):
         # check dimensions

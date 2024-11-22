@@ -165,7 +165,10 @@ or
 @article{H2024,
   title={Fast Kernel Summation in High Dimensions via Slicing and {F}ourier transforms},
   author={Hertrich, Johannes},
-  journal={SIAM Journal on Mathematics of Data Science, to appear},
+  journal={SIAM Journal on Mathematics of Data Science},
+  volume={6},
+  number={4},
+  pages={1109--1137},
   year={2024}
 }
 ```
