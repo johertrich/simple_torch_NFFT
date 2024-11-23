@@ -53,7 +53,13 @@ class Fastsum(torch.nn.Module):
         xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
         return xis
 
-    def forward(self, x, y, x_weights, scale, P):
+    def forward(self, x, y, x_weights, scale, P=None, xis=None):
+        if xis is None and P is None:
+            raise ValueError(
+                "either P (number of slices) or xis (Tensor containing slices) must be specified"
+            )
+        if xis is not None:
+            P = xis.shape[0]
         batch_size_P = P if self.batch_size_P is None else self.batch_size_P
         batch_size_nfft = (
             batch_size_P if self.batch_size_nfft is None else self.batch_size_nfft
@@ -62,8 +68,9 @@ class Fastsum(torch.nn.Module):
             batch_size_P = P
         else:
             P = batch_size_P * (((P - 1) // batch_size_P) + 1)
-        xis = self.get_xis(P, x.device)
-        return fastsum_fft(
+        if xis is None:
+            xis = self.get_xis(P, x.device)
+        out = fastsum_fft(
             x,
             y,
             x_weights,
@@ -74,4 +81,7 @@ class Fastsum(torch.nn.Module):
             self.nfft,
             self.batch_size_P,
             self.batch_size_nfft,
+            0,
+            True,
         )
+        return out

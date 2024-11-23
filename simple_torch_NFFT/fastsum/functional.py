@@ -1,10 +1,32 @@
 import torch
 
 
-def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft):
+def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_mean):
     a = nfft.adjoint(-x_proj, x_weights.reshape(1, 1, -1))
     a_time_kernel = a * kernel_ft
-    return torch.mean(torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1), 0)
+    out = torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
+    if take_mean:
+        return torch.mean(out, 0, keepdim=True)
+    return out
+
+
+def scale_inputs(
+    x,
+    y,
+    scale,
+    x_range,
+):
+    xy_norm = torch.sqrt(torch.sum(torch.cat((x, y), 0) ** 2, -1))
+    max_norm = torch.max(xy_norm)
+
+    scale_factor = 0.25 * x_range / max_norm
+    scale_max = 0.1
+    if scale * scale_factor > scale_max:
+        scale_factor = scale_max / scale
+    scale_real = scale * scale_factor
+    x = x * scale_factor
+    y = y * scale_factor
+    return x, y, scale_factor, scale
 
 
 def fastsum_fft(
@@ -18,8 +40,10 @@ def fastsum_fft(
     nfft,
     batch_size_P=None,
     batch_size_nfft=None,
+    derivative=0,
+    take_mean=True,
 ):
-
+    x, y, _, scale_real = scale_inputs(x, y, scale, x_range)
     P = xis.shape[0]
     M = y.shape[0]
     n_ft = nfft.N[0]
@@ -30,18 +54,9 @@ def fastsum_fft(
     batch_size_nfft = min(batch_size_nfft, batch_size_P)
 
     d = x.shape[1]
-    xy_norm = torch.sqrt(torch.sum(torch.cat((x, y), 0) ** 2, -1))
-    max_norm = torch.max(xy_norm)
-
-    scale_factor = 0.25 * x_range / max_norm
-    scale_max = 0.1
-    if scale * scale_factor > scale_max:
-        scale_factor = scale_max / scale
-    scale_real = scale * scale_factor
-    x = x * scale_factor
-    y = y * scale_factor
     h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
     kernel_ft = fourier_fun(h, scale_real)  # Gaussian_kernel_fun_ft(h,d,scale_real**2)
+    kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
 
     xi = xis.unsqueeze(1)
 
@@ -49,7 +64,7 @@ def fastsum_fft(
         P_local = xi.shape[0]
         x_proj = (xi @ x.T).reshape(P_local, 1, -1, 1)
         y_proj = (xi @ y.T).reshape(P_local, 1, -1, 1)
-        outs = torch.stack(
+        outs = torch.cat(
             [
                 fast_fourier_summation(
                     x_proj[i * batch_size_nfft : (i + 1) * batch_size_nfft],
@@ -57,21 +72,26 @@ def fastsum_fft(
                     x_weights,
                     kernel_ft,
                     nfft,
+                    take_mean,
                 )
                 for i in range(((P_local - 1) // batch_size_nfft) + 1)
             ],
             0,
         )
-        return torch.mean(outs, 0)
+        if take_mean:
+            return torch.mean(outs, 0, keepdim=True)
+        return outs
 
-    outs = torch.stack(
+    outs = torch.cat(
         [
             with_projections(xi[i * batch_size_P : (i + 1) * batch_size_P])
             for i in range(P // batch_size_P)
         ],
         0,
     )
-    return torch.mean(outs, 0)
+    if take_mean:
+        return torch.mean(outs, 0)
+    return outs
 
 
 def fastsum_energy_kernel_1D(x, x_weights, y):
