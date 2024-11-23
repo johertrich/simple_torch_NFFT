@@ -25,7 +25,7 @@ fastsum = Fastsum(d, kernel=kernel, n_ft=n_ft)
 
 x = torch.randn((N, d), device=device, dtype=torch.float)
 y = torch.randn((M, d), device=device, dtype=torch.float)
-x_weights = torch.ones(x.shape[0]).to(x)
+x_weights = torch.rand(x.shape[0]).to(x)
 output_sensitivities = torch.rand(y.shape[0]).to(y)
 
 # choosing kernel parameter by median rule
@@ -63,4 +63,5 @@ x_grad2 = (
     ).squeeze()
     / P
 )
+x_grad2 = x_grad2 * x_weights[:,None]
 print(x_grad[:1] / x_grad2[:1])  # should be scale_factor

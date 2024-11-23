@@ -10,12 +10,7 @@ def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_mean
     return out
 
 
-def scale_inputs(
-    x,
-    y,
-    scale,
-    x_range,
-):
+def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
     xy_norm = torch.sqrt(torch.sum(torch.cat((x, y), 0) ** 2, -1))
     max_norm = torch.max(xy_norm)
 
@@ -26,7 +21,9 @@ def scale_inputs(
     scale_real = scale * scale_factor
     x = x * scale_factor
     y = y * scale_factor
-    return x, y, scale_factor, scale
+    h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
+    kernel_ft = fourier_fun(h, scale_real)  # Gaussian_kernel_fun_ft(h,d,scale_real**2)
+    return x, y, scale_factor, kernel_ft, h
 
 
 def fastsum_fft(
@@ -43,19 +40,17 @@ def fastsum_fft(
     derivative=0,
     take_mean=True,
 ):
-    x, y, _, scale_real = scale_inputs(x, y, scale, x_range)
+    x, y, _, kernel_ft, h = fastsum_fft_precomputations(
+        x, y, scale, x_range, fourier_fun, nfft.N[0]
+    )
     P = xis.shape[0]
     M = y.shape[0]
-    n_ft = nfft.N[0]
     if batch_size_P is None:
         batch_size_P = P
     if batch_size_nfft is None:
         batch_size_nfft = batch_size_P
     batch_size_nfft = min(batch_size_nfft, batch_size_P)
 
-    d = x.shape[1]
-    h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
-    kernel_ft = fourier_fun(h, scale_real)  # Gaussian_kernel_fun_ft(h,d,scale_real**2)
     kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
 
     xi = xis.unsqueeze(1)

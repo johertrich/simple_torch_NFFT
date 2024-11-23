@@ -14,7 +14,7 @@ kernel = "Laplace"
 n_ft = 1024
 
 # number of projections to test
-Ps = [128, 256, 512]
+Ps = [128, 256, 512, 1024, 2048]
 
 N = 10000
 M = 10000
