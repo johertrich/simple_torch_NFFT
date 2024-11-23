@@ -9,7 +9,6 @@ def Gaussian_kernel_fun_ft(grid, d, sigma_sq):
     k = grid
     args = 2 * np.pi**2 * sigma_sq * k**2
     log_args = torch.log(args)
-    log_args[args == 0] = 0
     factor = d * torch.pi * torch.sqrt(sigma_sq / 2)
     log_out = (
         log_args * 0.5 * (d - 1)
@@ -18,7 +17,7 @@ def Gaussian_kernel_fun_ft(grid, d, sigma_sq):
     )
     out = torch.exp(log_out)
     if d > 1:
-        out[args == 0] = 0
+        out = torch.nan_to_num(out, nan=0.0)
     else:
         out[args == 0] = 1 / scipy.special.gamma((d + 2) / 2)
     return out * factor
@@ -42,7 +41,7 @@ def Matern_kernel_fun_ft(grid1d, d, beta, nu):
     )
     out = torch.exp(log_out + log_factor)
     if d > 1:
-        out[args == 0] = 0.0
+        out = torch.nan_to_num(out, nan=0.0)
     else:
         out[args == 0] = torch.exp(log_factor)
     return out
