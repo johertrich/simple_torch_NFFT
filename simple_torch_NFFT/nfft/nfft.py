@@ -45,6 +45,8 @@ class LinearAutograd(torch.autograd.Function):
             )
             if len(collapse_dims) > 0:
                 grad_inp = torch.sum(grad_inp, collapse_dims, keepdims=True)
+            if not inp.dtype == torch.complex64 and not inp.dtype == torch.complex128:
+                grad_inp = torch.real(grad_inp)
         else:
             grad_inp = None
         if ctx.needs_input_grad[0]:
