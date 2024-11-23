@@ -1,6 +1,6 @@
 import torch
 from .basis_funs import Gaussian_kernel_fun_ft, Matern_kernel_fun_ft
-from .functional import fastsum_fft
+from .functional import fastsum_fft, fastsum_fft_precomputations, FastsumFFTAutograd
 from simple_torch_NFFT import NFFT
 
 
@@ -17,6 +17,7 @@ class Fastsum(torch.nn.Module):
         batch_size_nfft=None,
         device="cuda" if torch.cuda.is_available() else "cpu",
         no_compile=False,
+        batched_autodiff=True,
     ):
         super().__init__()
         if n_ft is None:
@@ -47,13 +48,20 @@ class Fastsum(torch.nn.Module):
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
         self.x_range = x_range
+        self.batched_autodiff = batched_autodiff
 
     def get_xis(self, P, device):
         xis = torch.randn(P, self.dim, device=device)
         xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
         return xis
 
-    def forward(self, x, y, x_weights, scale, P=None, xis=None):
+    def forward(self, x, y, x_weights, scale, xis_or_P):
+        if isinstance(xis_or_P, int):
+            P = xis_or_P
+            xis = None
+        if isinstance(xis_or_P, torch.Tensor):
+            xis = xis_or_P
+            P = None
         if xis is None and P is None:
             raise ValueError(
                 "either P (number of slices) or xis (Tensor containing slices) must be specified"
@@ -66,22 +74,40 @@ class Fastsum(torch.nn.Module):
         )
         if P < batch_size_P:
             batch_size_P = P
-        else:
-            P = batch_size_P * (((P - 1) // batch_size_P) + 1)
+        if batch_size_nfft > batch_size_P:
+            batch_size_nfft = batch_size_P
         if xis is None:
             xis = self.get_xis(P, x.device)
-        out = fastsum_fft(
-            x,
-            y,
-            x_weights,
-            scale,
-            self.x_range,
-            self.fourier_fun,
-            xis,
-            self.nfft,
-            self.batch_size_P,
-            self.batch_size_nfft,
-            0,
-            True,
-        )
+
+        if self.batched_autodiff:
+            out = FastsumFFTAutograd.apply(
+                x,
+                y,
+                x_weights,
+                scale,
+                self.nfft.N[0],
+                self.x_range,
+                self.fourier_fun,
+                xis,
+                self.nfft,
+                self.batch_size_P,
+                self.batch_size_nfft,
+            )
+
+        else:
+            x, y, kernel_ft, h, _ = fastsum_fft_precomputations(
+                x, y, scale, self.x_range, self.fourier_fun, self.nfft.N[0]
+            )
+            out = fastsum_fft(
+                x,
+                y,
+                x_weights,
+                kernel_ft,
+                h,
+                xis,
+                self.nfft,
+                batch_size_P,
+                batch_size_nfft,
+                False,
+            )
         return out

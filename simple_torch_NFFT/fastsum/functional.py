@@ -1,13 +1,15 @@
 import torch
 
 
-def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_mean):
+def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_sum):
     a = nfft.adjoint(-x_proj, x_weights.reshape(1, 1, -1))
     a_time_kernel = a * kernel_ft
-    out = torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
-    if take_mean:
-        return torch.mean(out, 0, keepdim=True)
-    return out
+    if take_sum:
+        return torch.sum(
+            torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1), 0, keepdim=True
+        )
+    else:
+        return torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
 
 
 def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
@@ -23,26 +25,117 @@ def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
     y = y * scale_factor
     h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
     kernel_ft = fourier_fun(h, scale_real)  # Gaussian_kernel_fun_ft(h,d,scale_real**2)
-    return x, y, scale_factor, kernel_ft, h
+    return x, y, kernel_ft, h, scale_factor
+
+
+class FastsumFFTAutograd(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        x,
+        y,
+        x_weights,
+        scale,
+        n_ft,
+        x_range,
+        fourier_fun,
+        xis,
+        nfft,
+        batch_size_P=None,
+        batch_size_nfft=None,
+    ):
+        x, y, kernel_ft, h, scale_factor = fastsum_fft_precomputations(
+            x, y, scale, x_range, fourier_fun, n_ft
+        )
+        ctx.save_for_backward(x, y, x_weights, kernel_ft, h, xis, scale_factor)
+        ctx.nfft = nfft
+        ctx.batch_size_P = batch_size_P
+        ctx.batch_size_nfft = batch_size_nfft
+        return fastsum_fft(
+            x,
+            y,
+            x_weights,
+            kernel_ft,
+            h,
+            xis,
+            nfft,
+            batch_size_P,
+            batch_size_nfft,
+            derivative=False,
+        )
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x, y, x_weights, kernel_ft, h, xis, scale_factor = ctx.saved_tensors
+        grad_x, grad_y, grad_x_weights = None, None, None
+        if ctx.needs_input_grad[0]:
+            grad_x = fastsum_fft(
+                y,
+                x,
+                grad_output,
+                kernel_ft,
+                h,
+                xis,
+                ctx.nfft,
+                ctx.batch_size_P,
+                ctx.batch_size_nfft,
+                derivative=True,
+            )
+            grad_x = grad_x * x_weights[:, None] * scale_factor
+        if ctx.needs_input_grad[1]:
+            grad_y = fastsum_fft(
+                x,
+                y,
+                x_weights,
+                kernel_ft,
+                h,
+                xis,
+                ctx.nfft,
+                ctx.batch_size_P,
+                ctx.batch_size_nfft,
+                derivative=True,
+            )
+            grad_y = grad_y * grad_output[:, None] * scale_factor
+        if ctx.needs_input_grad[2]:
+            grad_x_weights = fastsum_fft(
+                y,
+                x,
+                grad_output,
+                kernel_ft,
+                h,
+                xis,
+                ctx.nfft,
+                ctx.batch_size_P,
+                ctx.batch_size_nfft,
+                derivative=False,
+            )
+        return (
+            grad_x,
+            grad_y,
+            grad_x_weights,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
 
 def fastsum_fft(
     x,
     y,
     x_weights,
-    scale,
-    x_range,
-    fourier_fun,
+    kernel_ft,
+    h,
     xis,
     nfft,
     batch_size_P=None,
     batch_size_nfft=None,
-    derivative=0,
-    take_mean=True,
+    derivative=False,
 ):
-    x, y, _, kernel_ft, h = fastsum_fft_precomputations(
-        x, y, scale, x_range, fourier_fun, nfft.N[0]
-    )
     P = xis.shape[0]
     M = y.shape[0]
     if batch_size_P is None:
@@ -51,7 +144,8 @@ def fastsum_fft(
         batch_size_nfft = batch_size_P
     batch_size_nfft = min(batch_size_nfft, batch_size_P)
 
-    kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
+    if derivative:
+        kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
 
     xi = xis.unsqueeze(1)
 
@@ -67,26 +161,34 @@ def fastsum_fft(
                     x_weights,
                     kernel_ft,
                     nfft,
-                    take_mean,
+                    take_sum=not derivative,
                 )
                 for i in range(((P_local - 1) // batch_size_nfft) + 1)
             ],
             0,
         )
-        if take_mean:
-            return torch.mean(outs, 0, keepdim=True)
-        return outs
+
+        if derivative:
+            return (
+                torch.nn.functional.conv1d(
+                    xi.squeeze().transpose(0, 1).flatten().reshape([1, 1, -1]),
+                    outs.transpose(0, 1).unsqueeze(1),
+                    stride=P_local,
+                )
+                .squeeze()
+                .unsqueeze(0)
+            )
+        else:
+            return torch.sum(outs, 0, keepdim=True)
 
     outs = torch.cat(
         [
             with_projections(xi[i * batch_size_P : (i + 1) * batch_size_P])
-            for i in range(P // batch_size_P)
+            for i in range(((P - 1) // batch_size_P) + 1)
         ],
         0,
     )
-    if take_mean:
-        return torch.mean(outs, 0)
-    return outs
+    return torch.sum(outs, 0) / P
 
 
 def fastsum_energy_kernel_1D(x, x_weights, y):

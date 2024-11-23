@@ -1,11 +1,14 @@
 import torch
 from simple_torch_NFFT import Fastsum
 from simple_torch_NFFT.fastsum.utils import get_median_distance
-from simple_torch_NFFT.fastsum.functional import fastsum_fft
+from simple_torch_NFFT.fastsum.functional import (
+    fastsum_fft,
+    fastsum_fft_precomputations,
+    FastsumFFTAutograd,
+)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-torch.random.manual_seed(0)
 d = 10
 kernel = "Laplace"
 
@@ -21,6 +24,7 @@ P = 256
 N = 1000
 M = 1000
 
+fastsum_naive = Fastsum(d, kernel=kernel, n_ft=n_ft, batched_autodiff=False)
 fastsum = Fastsum(d, kernel=kernel, n_ft=n_ft)
 
 x = torch.randn((N, d), device=device, dtype=torch.float)
@@ -35,33 +39,22 @@ scale = med
 xis = fastsum.get_xis(P, device)
 
 x.requires_grad_(True)
-s_sliced = fastsum(x, y, x_weights, scale, xis=xis)
+y.requires_grad_(True)
+x_weights.requires_grad_(True)
+
+s_sliced = fastsum_naive(x, y, x_weights, scale, xis)
+
 loss = torch.sum(s_sliced * output_sensitivities)
-x_grad = torch.autograd.grad(loss, x)[0]
+x_grad, y_grad, x_weights_grad = torch.autograd.grad(loss, [x, y, x_weights])
 
-x = x.requires_grad_(False)
-der_sums = fastsum_fft(
-    y,
-    x,
-    output_sensitivities,
-    scale,
-    fastsum.x_range,
-    fastsum.fourier_fun,
-    xis,
-    fastsum.nfft,
-    fastsum.batch_size_P,
-    fastsum.batch_size_nfft,
-    1,
-    False,
-)
+s_sliced = fastsum(x, y, x_weights, scale, xis)
 
-x_grad2 = (
-    torch.nn.functional.conv1d(
-        xis.transpose(0, 1).flatten().reshape([1, 1, -1]),
-        der_sums.transpose(0, 1).unsqueeze(1),
-        stride=P,
-    ).squeeze()
-    / P
+loss = torch.sum(s_sliced * output_sensitivities)
+x_grad2, y_grad2, x_weights_grad2 = torch.autograd.grad(loss, [x, y, x_weights])
+
+print("Difference in grad wrt x:", torch.sum((x_grad[:1] - x_grad2[:1]) ** 2).item())
+print("Difference in grad wrt y:", torch.sum((y_grad[:1] - y_grad2[:1]) ** 2).item())
+print(
+    "Differnece in grad wrt x_weights:",
+    torch.sum((x_weights_grad[:1] - x_weights_grad2[:1]) ** 2).item(),
 )
-x_grad2 = x_grad2 * x_weights[:,None]
-print(x_grad[:1] / x_grad2[:1])  # should be scale_factor
