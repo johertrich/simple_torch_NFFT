@@ -1,3 +1,5 @@
+[Main Page](../../readme.md), [Overview of Fast Kernel Summation](overview.md)
+
 # Background on Fast Kernel Summation via Slicing
 
 We describe the theoretical background for applying the NFFT for computing the kernel sums
@@ -35,7 +37,7 @@ The slices $\xi_1,...,\xi_P$ can be chosen either iid from the unit sphere or by
 
 ## Efficient Derivatives for Sliced Kernel Summation
 
-Backpropagation through the sliced kernel summation is not memory efficient, since the computation over all slices must be traced. To avoid this, we overwrite the backward pass again by using fast.
+Backpropagation through the sliced kernel summation is not memory efficient, since the computation over all slices must be traced. To avoid this, we overwrite the backward pass again by using again the fast kernel evaluation (and slicing) for computing the derivatives.
 
 ### Derivative with respect to $x_n$
 
