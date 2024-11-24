@@ -1,6 +1,6 @@
-[Main Page](../../readme.md), [Overview of Fast Kernel Summation](overview.md)
-
 # Background on Fast Kernel Summation via Slicing
+
+Back to: [Main Page](../../readme.md), [Overview of Fast Kernel Summation](overview.md)
 
 We describe the theoretical background for applying the NFFT for computing the kernel sums
 
