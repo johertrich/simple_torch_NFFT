@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <!-- inline config -->
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        macros: {
+         RR: "{\\bf R}",
+         bold: ["{\\bf #1}", 1],
+         indep: "{\\perp \\!\\!\\! \\perp}",
+       }
+     },
+     svg: {
+      fontCache: 'global'
+    },
+  };
+</script>
 
 <!-- load MathJax -->
 <script type="text/javascript" id="MathJax-script" async
