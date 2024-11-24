@@ -17,12 +17,12 @@ Fourier transform on non-equispaced grids. Here, we only consider the cases "equ
 "non-equidistant to equidistant" but not "non-equidistant to non-equidistant". For convenience, we stick to the 1D case.
 The forward problem is given by computing
 
-$$f_j=f(x_j)=\sum_{k=-N/2}^{N/2-1} \hat f_k e^{-2\pi k x_j},\quad j=1,...,M,$$
+$$f_j=f(x_j)=\sum_{k=-N/2}^{N/2-1} \hat f_k e^{-2 \pi i k x_j},\quad j=1,...,M,$$
 
 where $x_1,...,x_M\in[-\frac{1}{2},\frac{1}{2})$.
 The mapping $\hat f \mapsto f$ is linear and admits the adjoint operator
 
-$$\hat f_k=\sum_{j=1}^{M} f_j e^{2\pi k x_j},\quad k=-N/2,...,N/2-1.$$
+$$\hat f_k=\sum_{j=1}^{M} f_j e^{2 \pi i k x_j},\quad k=-N/2,...,N/2-1.$$
 
 The NFFT, as implemented in this package, approximates these two problems by using an interpolation with
 a windowing function.
