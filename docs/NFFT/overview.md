@@ -1,5 +1,7 @@
 # NFFT Implementation
 
+Back to: [Main Page](../../readme.md)
+
 We give a short overview on the NFFT implementation. It runs on a GPU, supports autograd (wrt both, function values and basis points) and allows batching. 
 
 ## Usage

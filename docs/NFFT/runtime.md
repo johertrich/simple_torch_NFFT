@@ -1,5 +1,7 @@
 # Runtime Comparison
 
+Back to: [Main Page](../../readme.md), [Overview of the NFFT](overview.md)
+
 The test script `test/tuntime_test.py` compares the runtime of this implementation with some other libraries.
 For the comparisons, we always perform all precomputations, which only depend on the input shape and dimension,
 but no precomputations depending on the basis points `x` or the function values `f` or `f_hat`.

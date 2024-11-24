@@ -1,5 +1,7 @@
 # Fast Kernel Summation via Slicing
 
+Back to: [Main Page](../../readme.md)
+
 In the following, we give details on the implemented fast kernel summation. A theoretical background can be found [here](background.md). A precise specification of all attributes and arguments in this library is given [here](specification.md).
 We aim to compute the kernel sums
 
