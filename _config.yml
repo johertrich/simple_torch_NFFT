@@ -6,3 +6,4 @@ relative_links:
 include:
   - readme.md
 
+theme: jekyll-theme-tactile
