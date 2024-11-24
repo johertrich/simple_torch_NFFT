@@ -1,5 +1,5 @@
 title: Simple Torch NFFT
-description: NFFT and Fast Kernel Sums in PyTorch
+description: "Simple Torch NFFT: NFFT and Fast Kernel Sums in PyTorch"
 
 plugins:
   - jekyll-relative-links
