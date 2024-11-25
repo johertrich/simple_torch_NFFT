@@ -5,7 +5,7 @@ from simple_torch_NFFT.fastsum.utils import get_median_distance
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 d = 10
-kernel = "Laplace"
+kernel = "energy"
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
@@ -19,7 +19,7 @@ Ps = [128, 256, 512, 1024, 2048]
 N = 1000
 M = 1000
 
-fastsum = Fastsum(d, kernel=kernel, n_ft=n_ft)
+fastsum = Fastsum(d, kernel=kernel, n_ft=n_ft, batched_autodiff=False)
 
 x = torch.randn((N, d), device=device, dtype=torch.float)
 y = torch.randn((M, d), device=device, dtype=torch.float)
@@ -36,6 +36,10 @@ if kernel == "Gauss":
     )
 elif kernel == "Laplace":
     kernel_matrix = torch.exp(
+        -torch.sqrt(torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1)) / scale
+    )
+elif kernel == "energy":
+    kernel_matrix = (
         -torch.sqrt(torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1)) / scale
     )
 
