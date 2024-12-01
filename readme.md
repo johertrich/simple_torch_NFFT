@@ -7,7 +7,13 @@ and allows batching.
 
 - **Fast Kernel Summations via Slicing**: We apply the NFFT for the computation of large kernel sums in arbitrary dimensions.
 
-Link to the github repository: [https://github.com/johertrich/simple_torch_NFFT](https://github.com/johertrich/simple_torch_NFFT)
+It requires only PyTorch (>= 2.5 recommended) and NumPy and can be installed with
+```
+pip install git+https://github.com/johertrich/simple_torch_NFFT
+```
+
+Link to the github repository: [https://github.com/johertrich/simple_torch_NFFT](https://github.com/johertrich/simple_torch_NFFT)  
+Link to the documentation: [https://johertrich.github.io/simple_torch_NFFT](https://johertrich.github.io/simple_torch_NFFT)
 
 ## Contents
 
@@ -23,12 +29,6 @@ For the fast kernel summation:
 - [Backgrounds](docs/KernelSummation/background.md) of fast kernel summation via slicing and NFFTs (including the efficient evaluation of derivatives)
 - [Specification](docs/KernelSummation/specification.md) of the implemented classes and functions 
 
-## Installation
-
-The library requires PyTorch (version >= 2.5 recommended) and Numpy. Then it can be installed by:
-```
-pip install git+https://github.com/johertrich/simple_torch_NFFT
-```
 
 ## Examples
 
