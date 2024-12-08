@@ -56,7 +56,7 @@ $$\nabla_{x_n} s_m = \mathbb{E}_{\xi\in\mathbb{S}^{d-1}}\left[w_n g'(\langle \xi
 
 Discretizing the expectation gives
 
-$$\nabla_{x_n} s_m \approx \frac1P\sum_{p=1}^P w_n g'(\langle \xi_p,x_n-y_m\rangle)\xi_p].$$
+$$\nabla_{x_n} s_m \approx \frac1P\sum_{p=1}^P w_n g'(\langle \xi_p,x_n-y_m\rangle)\xi_p.$$
 
 Hence, given sensitivities $\bar s_1,...,\bar s_M$, we can compute the sensitivities $\bar x_1,...,\bar x_N$ by
 
@@ -68,7 +68,7 @@ Now, the inner sum can be computed by the NFFT as described above. Note that the
 
 Similar as for the derivative wrt. $x$, it holds
 
-$$\nabla_{y_m} s_m \approx -\frac1P\sum_{p=1}^P \sum_{n=1}^N w_n g'(\langle \xi_p,x_n-y_m\rangle)\xi_p].$$
+$$\nabla_{y_m} s_m \approx -\frac1P\sum_{p=1}^P \sum_{n=1}^N w_n g'(\langle \xi_p,x_n-y_m\rangle)\xi_p.$$
 
 Hence, given sensitivities $\bar s_1,...,\bar s_M$, we can compute the sensitivities $\bar y_1,...,\bar y_M$ by
 
