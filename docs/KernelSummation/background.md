@@ -29,7 +29,7 @@ $$K(x,y)=\mathbb{E}_{\xi\in\mathbb{S}^{d-1}}[\mathrm{k}(\langle \xi,x\rangle,\la
 
 Then, we can compute the kernel sums by discretizing the expectation as
 
-$$s_m\approx\frac1P\sum_{p=1}^P\sum_{n=1}^N w_n\mathrm{k}(\langle \xi_p,x\rangle,\langle\xi_p, y\rangle)].$$
+$$s_m\approx\frac1P\sum_{p=1}^P\sum_{n=1}^N w_n\mathrm{k}(\langle \xi_p,x\rangle,\langle\xi_p, y\rangle).$$
 
 In particular, we can compute $P$ one-dimensional kernel sums instead of one high-dimensional kernel sum.
 Efficient ways how to find the kernel pairs $K$ and $\mathrm{k}$ were investigated [here](https://doi.org/10.1137/24M1632085), see also the papers [here](https://arxiv.org/abs/2408.11612) and [here](https://arxiv.org/abs/2410.01316). 
