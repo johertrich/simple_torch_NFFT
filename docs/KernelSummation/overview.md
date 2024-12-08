@@ -21,9 +21,21 @@ The implementation currently supports the following kernels:
 
 ## Usage and Example
 
-To use the fast kernel summation, we first create a `Fastsum` object with `fastsum=Fastsum(d, kernel="Gauss")`. It takes the dimension and the kernel (as string from the above list) as input. Other optional arguments are given in the example below and [here](specification.md).
+To use the fast kernel summation, we first create a `Fastsum` object with `fastsum=Fastsum(d, kernel="Gauss")`. It takes the dimension and the kernel (as string from the above list) as input. 
 
 Afterwards, we can compute the vector $s=(s_1,...,s_M)$ by `s=fastsum(x, y, w, xis_or_P)` where `x` has the shape `(N,d)`, `y` has the shape `(M,d)` and `w` has the shape `(N,)`. The argument `xis_or_P` either takes the number of considered slices as integer (higher number = higher accuracy) or the slices itself as a tensor of size `(P,d)`.
+
+Other optional arguments for the constructor of the `Fastsum` object include (full list in the [specification](specification.md)):
+
+- `kernel_params`: For the Matern kernel, we also have to specify `kernel_params=dict(nu=nu_val)`, where `nu_val` is a float specifying the smoothness parameter $\nu$.
+- Batch sizes: If the memory consumption is too high, the computation can be batched with two batch size parameters:
+	- `batch_size_P`: batch size for the slices
+	- `batch_size_nfft`: batch size for the NFFT (should be smaller or equal `batch_size_P`)
+- `slicing_mode`: By default the slices in the [slicing algorithm](background.md) are chosen iid. The performance can often be increased by using QMC rules. Currently the following modes are implemented:
+	- `"iid"`: default value using iid slices from the uniform distribution on the sphere
+	- `"spherical_design"`: spherical $t$-designs. This is only applicable for $d=3$ and $d=4$, but in this cases it is usually the best choice.
+
+
 
 ```python
 import torch
@@ -36,21 +48,6 @@ kernel = "Gauss" # kernel type
 
 
 fastsum = Fastsum(d, kernel=kernel, device=device) # fastsum object
-# other optional keyword arguments (with sensible defaults) are:
-# kernel_params: dict with further paramters 
-#   (e.g. dict(nu=1.5) for the Matern kernel with smoothness nu=1.5)
-# n_ft: Number of coefficients to truncate the Fourier series of the kernel
-# nfft: nfft object (for setting custom parameters in the NFFT)
-# x_range: cutoff parameter for rescaling
-# batch_size_P: batch size for the slices
-# batch_size_nfft: batch size for the NFFT
-# device: specify device
-# no_compile: default False, set True to skip compile of the NFFT 
-#   (useful for debugging)
-# batched_autodiff: default True, set False to use backprop through 
-#   the forward pass instead of overwriting the backward pass 
-#   (not efficient, but sometimes useful for debugging)
-
 
 scale = 1.0 # kernel parameter
 

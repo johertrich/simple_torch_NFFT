@@ -4,8 +4,8 @@ from simple_torch_NFFT.fastsum.utils import get_median_distance
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-d = 10
-kernel = "energy"
+d = 4
+kernel = "Gauss"
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
@@ -16,10 +16,9 @@ n_ft = 1024
 # number of projections to test
 Ps = [128, 256, 512, 1024, 2048]
 
-N = 1000
-M = 1000
+N = 100
+M = 100
 
-fastsum = Fastsum(d, kernel=kernel, n_ft=n_ft, batched_autodiff=False)
 
 x = torch.randn((N, d), device=device, dtype=torch.float)
 y = torch.randn((M, d), device=device, dtype=torch.float)
@@ -45,7 +44,16 @@ elif kernel == "energy":
 
 s_naive = kernel_matrix @ x_weights
 
-for P in Ps:
-    s_sliced = fastsum(x, y, x_weights, scale, P)
-    error = torch.sum(torch.abs(s_sliced - s_naive)) / torch.sum(torch.abs(s_naive))
-    print(f"Relative L1-error for {P} slices: {error.item()}")
+if d in [3, 4]:
+    slicing_modes = ["iid", "spherical_design"]
+else:
+    slicing_modes = ["iid"]
+
+for slicing_mode in slicing_modes:
+    fastsum = Fastsum(
+        d, kernel=kernel, n_ft=n_ft, batched_autodiff=False, slicing_mode=slicing_mode
+    )
+    for P in Ps:
+        s_sliced = fastsum(x, y, x_weights, scale, P)
+        error = torch.sum(torch.abs(s_sliced - s_naive)) / torch.sum(torch.abs(s_naive))
+        print(f"Relative L1-error for {P} slices: {error.item()}")

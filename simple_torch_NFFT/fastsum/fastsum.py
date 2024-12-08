@@ -8,6 +8,9 @@ from .functional import (
 )
 from simple_torch_NFFT import NFFT
 from .utils import compute_sliced_factor
+import importlib.resources
+import h5py
+import numpy as np
 
 
 class Fastsum(torch.nn.Module):
@@ -16,6 +19,7 @@ class Fastsum(torch.nn.Module):
         dim,
         kernel="Gauss",
         kernel_params=dict(),
+        slicing_mode="iid",
         n_ft=None,
         nfft=None,
         x_range=0.3,
@@ -59,14 +63,46 @@ class Fastsum(torch.nn.Module):
         else:
             self.nfft = nfft
 
+        assert slicing_mode in ["iid", "spherical_design"], "Unknown slicing mode"
+        self.slicing_mode = slicing_mode
+        if slicing_mode == "spherical_design":
+            assert self.dim in [
+                3,
+                4,
+            ], "Spherical designs are only available for d=3 and d=4"
+            base_path = str(importlib.resources.files("simple_torch_NFFT"))
+            self.xis_dict = {}
+            self.P_list = []
+            with h5py.File(
+                base_path + "/data/spherical_designs_S" + str(self.dim - 1) + ".h5", "r"
+            ) as f:
+                for P in f["xis"].keys():
+                    self.P_list.append(int(P))
+                    self.xis_dict[P] = torch.tensor(
+                        f["xis"][P][()], dtype=torch.float, device=device
+                    )
+
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
         self.x_range = x_range
         self.batched_autodiff = batched_autodiff
 
     def get_xis(self, P, device):
-        xis = torch.randn(P, self.dim, device=device)
-        xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
+        if self.slicing_mode == "iid":
+            xis = torch.randn(P, self.dim, device=device)
+            xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
+        elif self.slicing_mode == "spherical_design":
+            # There is not for any P a corresponding spherical design.
+            # Thus, we increase P to the next large value where a spherical design is available.
+            # If P is larger than the largest available spherical design, we use that one.
+            greater_P = [pp for pp in self.P_list if pp >= P]
+            if len(greater_P) == 0:
+                effP = np.max(self.P_list)
+            else:
+                effP = np.min(greater_P)
+            xis = self.xis_dict[str(effP)]
+        else:
+            raise NotImplementedError("Unknown slicing mode!")
         return xis
 
     def forward(self, x, y, x_weights, scale, xis_or_P):

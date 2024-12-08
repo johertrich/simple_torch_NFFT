@@ -10,7 +10,7 @@ The `Fastsum` class inherits from `torch.nn.Module`. A `Fastsum` object can be c
 ```
 from simple_torch_NFFT import Fastsum
 
-fastsum = Fastsum(dim, kernel="Gauss", kernel_params=dict(), n_ft=None, nfft=None, x_range=0.3, batch_size_P=None, batch_size_nfft=None, device="cuda" if torch.cuda.is_available() else "cpu", no_compile=False, batched_autodiff=True)
+fastsum = Fastsum(dim, kernel="Gauss", kernel_params=dict(), slicing_mode="iid", n_ft=None, nfft=None, x_range=0.3, batch_size_P=None, batch_size_nfft=None, device="cuda" if torch.cuda.is_available() else "cpu", no_compile=False, batched_autodiff=True)
 ```
 with required argument
 
@@ -20,6 +20,9 @@ and optional keyword arguments
 
 - `kernel="Gauss"`: string. Name of the used kernel. Possible choices are `"Gauss"`, `"Laplace"`, `"Matern"` and `"energy"`. See the [Overview](overview.md) page for a description of the kernels. For using a custom kernel, pass `"other"` and define a `kernel_params["fourier_fun"]` argument with a function handle of the Fourier transform of the one-dimensional kernel (the use of other kernels is to be simplified in the future).
 - `kernel_params=dict()`: `dict`. An additional dictionary with kernel parameters. This does not contain the scale/bandwidth parameter, but additional parameters like the smoothness parameter `nu` for the Matern kernel.
+- `slicing_mode="iid"`: string. Selection of the slicing directions $\xi$. Available choices are:
+	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere
+	- `"spherical_design"`: uses spherical $t$-designs on the sphere. This choice is only available for `dim==3` and `dim==4`.
 - `n_ft=None`: int. Number of coefficients which are used to truncate the Fourier series of the kernel. `None` for automatic choice (which is currently 1024; on a long-term perspective it is planned to implement something adaptively to the dimension...)
 - `nfft=None`: `simple_torch_NFFT.NFFT`. NFFT object which is used. `None` for creating a new one with standard parameters.
 - `x_range=0.3`: float. Input data is rescaled onto the interval `[-x_range,x_range]` in order to use the Fourier transform on a compact interval.
