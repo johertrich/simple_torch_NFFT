@@ -44,6 +44,9 @@ class Fastsum(torch.nn.Module):
                 x, self.dim, scale**2
             )
         elif kernel == "Matern":
+            assert (
+                "nu" in kernel_params.keys()
+            ), "For the Matern kenrel, the smoothness parameter nu must be contained in kernel_params"
             nu = kernel_params["nu"]
             self.fourier_fun = lambda x, scale: Matern_kernel_fun_ft(
                 x, self.dim, scale, nu
@@ -56,6 +59,9 @@ class Fastsum(torch.nn.Module):
             self.energy_kernel = True
             self.sliced_factor = compute_sliced_factor(self.dim)
         elif kernel == "other":
+            assert (
+                "fourier_fun" in kernel_params.keys()
+            ), "For custom kernels the Fourier transform of the 1D kernel must be contained in kernel_params"
             self.fourier_fun = kernel_params["fourier_fun"]
 
         if nfft is None and not self.energy_kernel:
@@ -109,6 +115,10 @@ class Fastsum(torch.nn.Module):
             else:
                 effP = np.min(greater_P)
             xis = self.xis_dict[str(effP)]
+            # random rotations for obtaining an unbiased estimator:
+            rot = torch.randn((self.dim, self.dim), device=device)
+            rot, _ = torch.linalg.qr(rot)
+            xis = torch.matmul(xis, rot)
         elif self.slicing_mode == "orthogonal":
             rot = torch.randn((P // self.dim + 1, self.dim, self.dim), device=device)
             rot, _ = torch.linalg.qr(rot)

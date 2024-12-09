@@ -1,4 +1,4 @@
-# Specification of the Implemented NFFT Functions and Classes
+# Specification of the Implemented Fastsum Functions and Classes
 
 Back to: [Main Page](../../readme.md), [Overview of Fast Kernel Summation](overview.md)
 
