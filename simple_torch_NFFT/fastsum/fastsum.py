@@ -4,6 +4,7 @@ from .functional import (
     fastsum_fft,
     fastsum_fft_precomputations,
     FastsumFFTAutograd,
+    FastsumEnergyAutograd,
     fast_energy_summation,
 )
 from simple_torch_NFFT import NFFT
@@ -165,20 +166,26 @@ class Fastsum(torch.nn.Module):
 
         if self.batched_autodiff:
             if self.energy_kernel:
-                raise NotImplementedError
-            out = FastsumFFTAutograd.apply(
-                x,
-                y,
-                x_weights,
-                scale,
-                self.nfft.N[0],
-                self.x_range,
-                self.fourier_fun,
-                xis,
-                self.nfft,
-                self.batch_size_P,
-                self.batch_size_nfft,
-            )
+                out = (
+                    FastsumEnergyAutograd.apply(
+                        x, y, x_weights, self.sliced_factor, batch_size_P, xis
+                    )
+                    / scale
+                )
+            else:
+                out = FastsumFFTAutograd.apply(
+                    x,
+                    y,
+                    x_weights,
+                    scale,
+                    self.nfft.N[0],
+                    self.x_range,
+                    self.fourier_fun,
+                    xis,
+                    self.nfft,
+                    self.batch_size_P,
+                    self.batch_size_nfft,
+                )
 
         else:
             if self.energy_kernel:

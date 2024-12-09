@@ -13,10 +13,10 @@ for all $m=1,...,M$. The naive implementation has a computational complexity of 
 
 The implementation currently supports the following kernels:
 
-- The `Gauss` kernel given by $K(x,y)=\exp(-\frac1{2\sigma^2}\\|x-y\\|^2)$
+- The `Gauss` kernel given by $K(x,y)=\exp(-\frac1{2\sigma^2}\\|x-y\\|^2)$.
 - The `Laplace` kernel given by $K(x,y)=\exp(-\frac1{\sigma}\\|x-y\\|)$. In the literature, the parameter $\sigma$ is often replaced by $\frac{1}{\alpha}$. However, we stick to the above notation to handle the scale parameter similarly for all kernels.
 - The `Matern` kernel given by $K(x,y)=\frac{2^{1-\nu}}{\Gamma(\nu)}(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)^\nu K_\nu(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)$, where $K_\nu$ is the modified Bessel function of second kind. The kernel depends on a smoothness parameter $\nu$ which determines its smoothness. For $\nu=\frac12$, we obtain the Laplace kernel and for $\nu\to\infty$, the Matern kernel converges towards the Gauss kernel.
-- The `energy` kernel given by $K(x,y)=-\frac{1}{\sigma}\\|x-y\\|$. So far the custom backward pass is not implemented (i.e. it only works for `batched_autograd==False`).`
+- The `energy` kernel given by $K(x,y)=-\frac{1}{\sigma}\\|x-y\\|$.
 
 
 ## Usage and Example
@@ -65,6 +65,6 @@ kernel_sum = fastsum(x, y, x_weights, scale, P) # compute kernel sum
 In the future, I want to add:
 
 - distance slicing with precomputed slicing directions
-- other kernels (thin plate spline, logarithmic), backward pass for the energy kernel
+- other kernels (thin plate spline, logarithmic)
 - 1D Summation via KeOps as alternative to NFFT (could be useful in particular, when we are considering a low number of (relevant) Fourier features like, e.g., in the Gaussian kernel)
 - for $d=2$ and $d=3$: add fast Fourier summation (without slicing)

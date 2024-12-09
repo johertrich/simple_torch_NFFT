@@ -191,6 +191,42 @@ def fastsum_fft(
     return torch.sum(outs, 0) / P
 
 
+class FastsumEnergyAutograd(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, y, x_weights, sliced_factor, batch_size, xis):
+        ctx.save_for_backward(x, y, x_weights, xis)
+        ctx.sliced_factor = sliced_factor
+        ctx.batch_size = batch_size
+        return fast_energy_summation(x, y, x_weights, sliced_factor, batch_size, xis)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x, y, x_weights, xis = ctx.saved_tensors
+        grad_x, grad_y, grad_x_weights = None, None, None
+        if ctx.needs_input_grad[0]:
+            grad_x = fast_energy_summation_grad(
+                y, x, grad_output, ctx.sliced_factor, ctx.batch_size, xis
+            )
+            grad_x = grad_x * x_weights[:, None]
+        if ctx.needs_input_grad[1]:
+            grad_y = fast_energy_summation_grad(
+                x, y, x_weights, ctx.sliced_factor, ctx.batch_size, xis
+            )
+            grad_y = grad_y * grad_output[:, None]
+        if ctx.needs_input_grad[2]:
+            grad_x_weights = fast_energy_summation(
+                y, x, grad_output, ctx.sliced_factor, ctx.batch_size, xis
+            )
+        return (
+            grad_x,
+            grad_y,
+            grad_x_weights,
+            None,
+            None,
+            None,
+        )
+
+
 def fastsum_energy_kernel_1D(x, x_weights, y):
     # Sorting algorithm for fast sumation with negative distance (energy) kernel
     N = x.shape[1]
@@ -233,8 +269,65 @@ def fast_energy_summation(x, y, x_weights, sliced_factor, batch_size, xis):
         y_proj = (xi @ y.T).reshape(P_local, -1)
         fastsum_energy = fastsum_energy_kernel_1D(
             x_proj, x_weights[None, :].tile(P_local, 1), y_proj
-        ).transpose(0, 1)
-        return sliced_factor * torch.sum(-fastsum_energy, 1)
+        )
+        return sliced_factor * torch.sum(-fastsum_energy, 0)
+
+    return (
+        torch.sum(
+            torch.stack(
+                [
+                    with_projections(xis[i * batch_size : (i + 1) * batch_size])
+                    for i in range((P - 1) // batch_size + 1)
+                ],
+                0,
+            ),
+            0,
+        )
+        / P
+    )
+
+
+def fastsum_energy_kernel_1D_grad(x, x_weights, y):
+    # Sorting algorithm for fast sumation with the gradient of the negative distance (energy) kernel
+    N = x.shape[1]
+    M = y.shape[1]
+    P = x.shape[0]
+    weights_sum = torch.sum(x_weights, 1, keepdim=True)
+    # Potential Energy
+    sorted_yx, inds_yx = torch.sort(torch.cat((y, x), 1))
+    inds_yx = inds_yx + torch.arange(P, device=x.device).unsqueeze(1) * (N + M)
+    inds_yx = torch.flatten(inds_yx)
+    weights_sorted = (
+        torch.cat((torch.zeros_like(y), x_weights), 1).flatten()[inds_yx].reshape(P, -1)
+    )
+    potential = 2 * torch.cumsum(weights_sorted, 1) - weights_sum
+    out1 = torch.zeros_like(sorted_yx).flatten()
+    out1[inds_yx] = potential.flatten()
+    out1 = out1.reshape(P, -1)
+    out1 = out1[:, :M]
+    return out1
+
+
+def fast_energy_summation_grad(x, y, x_weights, sliced_factor, batch_size, xis):
+    # fast sum gradient via slicing and sorting
+    d = x.shape[1]
+    P = xis.shape[0]
+
+    def with_projections(xi):
+        P_local = xi.shape[0]
+        x_proj = (xi @ x.T).reshape(P_local, -1)
+        y_proj = (xi @ y.T).reshape(P_local, -1)
+        outs = (
+            -fastsum_energy_kernel_1D_grad(
+                x_proj, x_weights[None, :].tile(P_local, 1), y_proj
+            )
+            * sliced_factor
+        )
+        return torch.nn.functional.conv1d(
+            xi.squeeze().transpose(0, 1).flatten().reshape([1, 1, -1]),
+            outs.transpose(0, 1).unsqueeze(1),
+            stride=P_local,
+        ).squeeze()
 
     return (
         torch.sum(

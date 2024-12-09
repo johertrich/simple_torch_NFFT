@@ -10,7 +10,7 @@ from simple_torch_NFFT.fastsum.functional import (
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 d = 10
-kernel = "Laplace"
+kernel = "energy"
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
@@ -51,6 +51,10 @@ s_sliced = fastsum(x, y, x_weights, scale, xis)
 
 loss = torch.sum(s_sliced * output_sensitivities)
 x_grad2, y_grad2, x_weights_grad2 = torch.autograd.grad(loss, [x, y, x_weights])
+
+print("Norm of grad wrt x:", torch.sum((x_grad[:1]) ** 2).item())
+print("Norm of grad wrt y:", torch.sum((y_grad[:1]) ** 2).item())
+print("Norm of grad wrt x_weights:", torch.sum((x_weights_grad[:1]) ** 2).item())
 
 print("Difference in grad wrt x:", torch.sum((x_grad[:1] - x_grad2[:1]) ** 2).item())
 print("Difference in grad wrt y:", torch.sum((y_grad[:1] - y_grad2[:1]) ** 2).item())

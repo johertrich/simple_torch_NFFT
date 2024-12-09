@@ -84,6 +84,10 @@ Hence, given sensitivities $\bar s_1,...,\bar s_M$ the computation of the sensit
 $$\bar w_n=\sum_{m=1}^M \bar s_m K(x_n,y_m),$$
 which is again a kernel summation, which can be computed via slicing.
 
+### Energy kernel
+
+Even though we do not use the NFFT for the energy kernel, computing derivatives of 1D kernel sums still works via a sorting algorithm as outlined in [this paper](https://openreview.net/forum?id=VdkGRV1vcf).
+
 ## Citation
 
 The fast kernel summation via slicing was introduced in this paper:
