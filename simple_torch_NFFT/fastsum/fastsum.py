@@ -63,7 +63,12 @@ class Fastsum(torch.nn.Module):
         else:
             self.nfft = nfft
 
-        assert slicing_mode in ["iid", "spherical_design"], "Unknown slicing mode"
+        assert slicing_mode in [
+            "iid",
+            "spherical_design",
+            "orthogonal",
+            "Sobol",
+        ], "Unknown slicing mode"
         self.slicing_mode = slicing_mode
         if slicing_mode == "spherical_design":
             assert self.dim in [
@@ -81,6 +86,9 @@ class Fastsum(torch.nn.Module):
                     self.xis_dict[P] = torch.tensor(
                         f["xis"][P][()], dtype=torch.float, device=device
                     )
+        if slicing_mode == "Sobol":
+            self.sobolEng = torch.quasirandom.SobolEngine(self.dim)
+            self.gauss_quantile = lambda p: np.sqrt(2) * torch.erfinv(2 * p - 1)
 
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
@@ -101,6 +109,17 @@ class Fastsum(torch.nn.Module):
             else:
                 effP = np.min(greater_P)
             xis = self.xis_dict[str(effP)]
+        elif self.slicing_mode == "orthogonal":
+            rot = torch.randn((P // self.dim + 1, self.dim, self.dim), device=device)
+            rot, _ = torch.linalg.qr(rot)
+            rot = rot.reshape(-1, self.dim)
+            xis = rot[:P]
+        elif self.slicing_mode == "Sobol":
+            self.sobolEng.reset()
+            xis = self.gauss_quantile(self.sobolEng.draw(P).to(device))
+            zero_inds = torch.sqrt(torch.sum(xis**2, -1)) < 1e-6
+            xis[zero_inds] = torch.randn_like(xis[zero_inds])
+            xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
         else:
             raise NotImplementedError("Unknown slicing mode!")
         return xis

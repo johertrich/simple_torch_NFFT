@@ -21,8 +21,10 @@ and optional keyword arguments
 - `kernel="Gauss"`: string. Name of the used kernel. Possible choices are `"Gauss"`, `"Laplace"`, `"Matern"` and `"energy"`. See the [Overview](overview.md) page for a description of the kernels. For using a custom kernel, pass `"other"` and define a `kernel_params["fourier_fun"]` argument with a function handle of the Fourier transform of the one-dimensional kernel (the use of other kernels is to be simplified in the future).
 - `kernel_params=dict()`: `dict`. An additional dictionary with kernel parameters. This does not contain the scale/bandwidth parameter, but additional parameters like the smoothness parameter `nu` for the Matern kernel.
 - `slicing_mode="iid"`: string. Selection of the slicing directions $\xi$. Available choices are:
-	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere
-	- `"spherical_design"`: uses spherical $t$-designs on the sphere. This choice is only available for `dim==3` and `dim==4`.
+	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere.
+	- `"orthogonal"`: Chooses the directions $\xi_p$ to be a random orthogonal system when $P\le d$. If $P>d$, we choose several independently drawn sets of random orthogonal systems. See [orthogonal random features](https://arxiv.org/abs/1610.09072) (in a random features setting) for details.
+	- `"Sobol"`: Use the first $P$ entries of a Sobol sequence, transform them by the inverse cdf of a normal distribution and project it onto a sphere.
+	- `"spherical_design"`: uses spherical $t$-designs. This choice is only available for `dim==3` and `dim==4`, but in this case it is usually the most accurate choice.
 - `n_ft=None`: int. Number of coefficients which are used to truncate the Fourier series of the kernel. `None` for automatic choice (which is currently 1024; on a long-term perspective it is planned to implement something adaptively to the dimension...)
 - `nfft=None`: `simple_torch_NFFT.NFFT`. NFFT object which is used. `None` for creating a new one with standard parameters.
 - `x_range=0.3`: float. Input data is rescaled onto the interval `[-x_range,x_range]` in order to use the Fourier transform on a compact interval.

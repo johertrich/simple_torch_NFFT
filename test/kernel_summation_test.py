@@ -3,6 +3,7 @@ from simple_torch_NFFT import Fastsum
 from simple_torch_NFFT.fastsum.utils import get_median_distance
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+torch._dynamo.config.cache_size_limit = 1024
 
 d = 4
 kernel = "Gauss"
@@ -16,8 +17,8 @@ n_ft = 1024
 # number of projections to test
 Ps = [128, 256, 512, 1024, 2048]
 
-N = 100
-M = 100
+N = 1000
+M = 1000
 
 
 x = torch.randn((N, d), device=device, dtype=torch.float)
@@ -45,9 +46,9 @@ elif kernel == "energy":
 s_naive = kernel_matrix @ x_weights
 
 if d in [3, 4]:
-    slicing_modes = ["iid", "spherical_design"]
+    slicing_modes = ["iid", "orthogonal", "Sobol", "spherical_design"]
 else:
-    slicing_modes = ["iid"]
+    slicing_modes = ["iid", "orthogonal", "Sobol"]
 
 for slicing_mode in slicing_modes:
     fastsum = Fastsum(
