@@ -94,7 +94,10 @@ class Fastsum(torch.nn.Module):
                     )
         if slicing_mode == "Sobol":
             self.sobolEng = torch.quasirandom.SobolEngine(self.dim)
-            self.gauss_quantile = lambda p: np.sqrt(2) * torch.erfinv(2 * p - 1)
+            eps = 1e-4
+            self.gauss_quantile = lambda p: np.sqrt(2) * torch.erfinv(
+                (2 - 2 * eps) * p - 1 + eps
+            )
 
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
@@ -126,7 +129,9 @@ class Fastsum(torch.nn.Module):
             xis = rot[:P]
         elif self.slicing_mode == "Sobol":
             self.sobolEng.reset()
-            xis = self.gauss_quantile(self.sobolEng.draw(P).to(device))
+            xis = self.gauss_quantile(
+                self.sobolEng.draw(P).to(device).clip(1e-6, 1 - 1e-6)
+            )
             zero_inds = torch.sqrt(torch.sum(xis**2, -1)) < 1e-6
             xis[zero_inds] = torch.randn_like(xis[zero_inds])
             xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))

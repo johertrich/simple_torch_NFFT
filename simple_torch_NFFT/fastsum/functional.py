@@ -234,15 +234,18 @@ def fast_energy_summation(x, y, x_weights, sliced_factor, batch_size, xis):
         fastsum_energy = fastsum_energy_kernel_1D(
             x_proj, x_weights[None, :].tile(P_local, 1), y_proj
         ).transpose(0, 1)
-        return sliced_factor * torch.mean(-fastsum_energy, 1)
+        return sliced_factor * torch.sum(-fastsum_energy, 1)
 
-    return torch.mean(
-        torch.stack(
-            [
-                with_projections(xis[i * batch_size : (i + 1) * batch_size])
-                for i in range(P // batch_size)
-            ],
+    return (
+        torch.sum(
+            torch.stack(
+                [
+                    with_projections(xis[i * batch_size : (i + 1) * batch_size])
+                    for i in range((P - 1) // batch_size + 1)
+                ],
+                0,
+            ),
             0,
-        ),
-        0,
+        )
+        / P
     )
