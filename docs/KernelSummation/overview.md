@@ -64,7 +64,6 @@ kernel_sum = fastsum(x, y, x_weights, scale, P) # compute kernel sum
 
 In the future, I want to add:
 
-- distance slicing with precomputed slicing directions
 - other kernels (thin plate spline, logarithmic)
 - 1D Summation via KeOps as alternative to NFFT (could be useful in particular, when we are considering a low number of (relevant) Fourier features like, e.g., in the Gaussian kernel)
 - for $d=2$ and $d=3$: add fast Fourier summation (without slicing)
