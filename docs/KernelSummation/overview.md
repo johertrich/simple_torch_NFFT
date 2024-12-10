@@ -31,7 +31,7 @@ Other optional arguments for the constructor of the `Fastsum` object include (fu
 - Batch sizes: If the memory consumption is too high, the computation can be batched with two batch size parameters:
 	- `batch_size_P`: batch size for the slices
 	- `batch_size_nfft`: batch size for the NFFT (should be smaller or equal `batch_size_P`)
-- `slicing_mode`: By default the slices in the [slicing algorithm](background.md) are chosen iid. The performance can often be increased by using QMC rules. Currently the modes `"iid"`, `"orthogonal"`, `"Sobol"` and `"spherical_design"` are implemented, see [specification](specification.md) for a description. This choice `"spherical_design"` is only applicable for $d=3$ and $d=4$, but in this case it is usually the best choice.
+- `slicing_mode`: By default the slices in the [slicing algorithm](background.md) are chosen iid. The performance can often be increased by using QMC rules. Currently the modes `"iid"`, `"orthogonal"`, `"Sobol"`, `"distance"` and `"spherical_design"` are implemented, see [specification](specification.md) for a description. This choice `"spherical_design"` is only applicable for $d=3$ and $d=4$. The default value is `"spherical_design"` for $d\in\\{3,4\\}$, `"distance"` for $d \leq 100$ but $d\not\in\\{3,4\\}$ and `"orthogonal"` otherwise.
 
 
 

@@ -1,4 +1,4 @@
-# PyTorch Implementation of the NFFT and Fast Kernel Sums
+# PyTorch NFFT and Fast Kernel Summation via Slicing
 
 In this library, we implement the following methods:
 

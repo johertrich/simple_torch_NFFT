@@ -5,7 +5,7 @@ from simple_torch_NFFT.fastsum.utils import get_median_distance
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch._dynamo.config.cache_size_limit = 1024
 
-d = 4
+d = 20
 kernel = "Gauss"
 
 # number of Fourier coefficients to truncate,
@@ -46,9 +46,9 @@ elif kernel == "energy":
 s_naive = kernel_matrix @ x_weights
 
 if d in [3, 4]:
-    slicing_modes = ["iid", "orthogonal", "Sobol", "spherical_design"]
+    slicing_modes = ["iid", "orthogonal", "Sobol", "distance", "spherical_design"]
 else:
-    slicing_modes = ["iid", "orthogonal", "Sobol"]
+    slicing_modes = ["iid", "orthogonal", "Sobol", "distance"]
 
 for slicing_mode in slicing_modes:
     fastsum = Fastsum(

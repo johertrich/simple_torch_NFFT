@@ -24,6 +24,7 @@ and optional keyword arguments
 	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere.
 	- `"orthogonal"`: Chooses the directions $\xi_p$ to be a random orthogonal system when $P\le d$. If $P>d$, we choose several independently drawn sets of random orthogonal systems. See [orthogonal random features](https://arxiv.org/abs/1610.09072) (in a random features setting) for details.
 	- `"Sobol"`: Use the first $P$ entries of a Sobol sequence, transform them by the inverse cdf of a normal distribution and project it onto a sphere.
+	- `"distance"`: maximizers of the pairwise distance $\mathcal E(\xi_1,...,\xi_P)=\sum_{p,q=1}^P \\|\xi_p-\xi_q\\|$ (in practice we use a symmetrized form of $\mathcal E$, see Section 4.1 of [this paper](https://arxiv.org/abs/2410.01316). These directions were precomputed for $d<=100$ and will be downloaded during the initialization of the `Fastsum` object. For $d>100$, the code goes back to orthogonal slices which coincide with distance slices for $P\leq d$.
 	- `"spherical_design"`: uses spherical $t$-designs. This choice is only available for `dim==3` and `dim==4`, but in this case it is usually the most accurate choice.
 - `n_ft=None`: int. Number of coefficients which are used to truncate the Fourier series of the kernel. `None` for automatic choice (which is currently 1024; on a long-term perspective it is planned to implement something adaptively to the dimension...)
 - `nfft=None`: `simple_torch_NFFT.NFFT`. NFFT object which is used. `None` for creating a new one with standard parameters.

@@ -12,6 +12,9 @@ from .utils import compute_sliced_factor
 import importlib.resources
 import h5py
 import numpy as np
+import urllib.request
+import os
+import hashlib
 
 
 class Fastsum(torch.nn.Module):
@@ -20,7 +23,7 @@ class Fastsum(torch.nn.Module):
         dim,
         kernel="Gauss",
         kernel_params=dict(),
-        slicing_mode="iid",
+        slicing_mode=None,
         n_ft=None,
         nfft=None,
         x_range=0.3,
@@ -70,36 +73,108 @@ class Fastsum(torch.nn.Module):
         else:
             self.nfft = nfft
 
+        if slicing_mode is None:
+            if self.dim in [3, 4]:
+                slicing_mode = "spherical_design"
+            elif self.dim <= 100:
+                slicing_mode = "distance"
+            else:
+                slicing_mode = "orthogonal"
+
         assert slicing_mode in [
             "iid",
             "spherical_design",
             "orthogonal",
             "Sobol",
+            "distance",
         ], "Unknown slicing mode"
-        self.slicing_mode = slicing_mode
         if slicing_mode == "spherical_design":
-            assert self.dim in [
-                3,
-                4,
-            ], "Spherical designs are only available for d=3 and d=4"
-            base_path = str(importlib.resources.files("simple_torch_NFFT"))
-            self.xis_dict = {}
-            self.P_list = []
-            with h5py.File(
-                base_path + "/data/spherical_designs_S" + str(self.dim - 1) + ".h5", "r"
-            ) as f:
-                for P in f["xis"].keys():
-                    self.P_list.append(int(P))
-                    self.xis_dict[P] = torch.tensor(
-                        f["xis"][P][()], dtype=torch.float, device=device
-                    )
+            if self.dim in [3, 4]:
+                base_path = str(importlib.resources.files("simple_torch_NFFT"))
+                self.xis_dict = {}
+                self.P_list = []
+                with h5py.File(
+                    base_path + "/data/spherical_designs_S" + str(self.dim - 1) + ".h5",
+                    "r",
+                ) as f:
+                    for P in f["xis"].keys():
+                        self.P_list.append(int(P))
+                        self.xis_dict[P] = torch.tensor(
+                            f["xis"][P][()], dtype=torch.float, device=device
+                        )
+            elif self.dim <= 100:
+                print(
+                    "Spherical designs are only available for d=3 and d=4! Therefore distance slices are used!"
+                )
+                slicing_mode = "distance"
+            else:
+                print(
+                    "Spherical designs are only available for d=3 and d=4! Therefore orthogonal slices are used!"
+                )
+                slicing_mode = "orthogonal"
         if slicing_mode == "Sobol":
             self.sobolEng = torch.quasirandom.SobolEngine(self.dim)
             eps = 1e-4
             self.gauss_quantile = lambda p: np.sqrt(2) * torch.erfinv(
                 (2 - 2 * eps) * p - 1 + eps
             )
+        if slicing_mode == "distance":
+            if self.dim <= 100:
+                fdir = "distance_directions"
+                if not os.path.isdir(fdir):
+                    os.mkdir(fdir)
+                if self.dim <= 20:
+                    fname = "distance_directions_dim_2_to_20.h5"
+                    drive_id = "1vh9UxqXV2PcsUHDxIYyS55lgQTXqupHG"
+                    md5_val = "da440f823168cd68bf79e26306580c7a"
+                    # https://drive.google.com/file/d/1vh9UxqXV2PcsUHDxIYyS55lgQTXqupHG/view?usp=sharing
+                elif self.dim <= 40:
+                    fname = "distance_directions_dim_21_to_40.h5"
+                    drive_id = "1Ah3WSn1TKR-4xGJp9bC95Y8Gbwr0VJOd"
+                    md5_val = "3b3d27c02a300d829fbeb4e526111d6c"
+                    # https://drive.google.com/file/d/1Ah3WSn1TKR-4xGJp9bC95Y8Gbwr0VJOd/view?usp=sharing
+                elif self.dim <= 60:
+                    fname = "distance_directions_dim_41_to_60.h5"
+                    drive_id = "1XqReXjZ1q1mpGCrHwg4wUX4zTpNivB_T"
+                    md5_val = "c52e03aca5e5d2e97a869de5b0ae4f56"
+                    # https://drive.google.com/file/d/1XqReXjZ1q1mpGCrHwg4wUX4zTpNivB_T/view?usp=sharing
+                elif self.dim <= 80:
+                    fname = "distance_directions_dim_61_to_80.h5"
+                    drive_id = "1lBWiDWg74nvzOm7_YtFgGZKH_ugiDSKC"
+                    md5_val = "5cde0e44f2afae694c587db38504d4b2"
+                    # https://drive.google.com/file/d/1lBWiDWg74nvzOm7_YtFgGZKH_ugiDSKC/view?usp=sharing
+                elif self.dim <= 100:
+                    fname = "distance_directions_dim_81_to_100.h5"
+                    drive_id = "1rPmwIrBtWmGrcg37z_w5ILc2I9KR5ZYz"
+                    md5_val = "65f138cd53f5b393cea3ba25c6bd4750"
+                    # https://drive.google.com/file/d/1rPmwIrBtWmGrcg37z_w5ILc2I9KR5ZYz/view?usp=sharing
+                if not os.path.isfile(fdir + "/" + fname):
+                    print("Download precomputed distance slices...")
+                    url = "https://drive.google.com/uc?export=download&id=" + drive_id
+                    urllib.request.urlretrieve(url, fdir + "/" + fname)
+                    print("Download completed...")
+                # verify
+                md5_file = hashlib.md5(
+                    open(fdir + "/" + fname, "rb").read()
+                ).hexdigest()
+                assert (
+                    md5_file == md5_val
+                ), "Verification of the file with the distance slices failed!"
+                self.xis_dict = {}
+                self.P_list = []
+                with h5py.File(fdir + "/" + fname, "r") as f:
+                    for P in f[str(self.dim)].keys():
+                        self.P_list.append(int(P))
+                        self.xis_dict[P] = torch.tensor(
+                            f[str(self.dim)][P][()], dtype=torch.float, device=device
+                        )
+            else:
+                print(
+                    "Precomputed distance slices are only available for d<=100! Therefore orthogonal slices are used!"
+                )
+                slicing_mode = "orthogonal"
 
+        self.slicing_mode = slicing_mode
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
         self.x_range = x_range
@@ -109,10 +184,10 @@ class Fastsum(torch.nn.Module):
         if self.slicing_mode == "iid":
             xis = torch.randn(P, self.dim, device=device)
             xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
-        elif self.slicing_mode == "spherical_design":
-            # There is not for any P a corresponding spherical design.
-            # Thus, we increase P to the next large value where a spherical design is available.
-            # If P is larger than the largest available spherical design, we use that one.
+        elif self.slicing_mode == "spherical_design" or self.slicing_mode == "distance":
+            # There is not for any P a corresponding spherical design / set of saved distance slices.
+            # Thus, we increase P to the next large value where a spherical design / set of saved distances slices is available.
+            # If P is larger than the largest available spherical design / set of saved distance slices, we use that one.
             greater_P = [pp for pp in self.P_list if pp >= P]
             if len(greater_P) == 0:
                 effP = np.max(self.P_list)
