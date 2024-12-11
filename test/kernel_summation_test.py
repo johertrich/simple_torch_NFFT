@@ -6,13 +6,15 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch._dynamo.config.cache_size_limit = 1024
 
 d = 4
-kernel = "thin_plate"
+kernel = "logarithmic"
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
 # maybe I will add an adaptive selection for Gauss/Laplace/Matern at some point...
 # higher value for rougher kernel and higher dimension
 n_ft = 1024
+if kernel == "logarithmic":
+    n_ft = n_ft * 64
 
 # number of projections to test
 Ps = [128, 256, 512, 1024, 2048]
@@ -46,7 +48,6 @@ elif kernel == "thin_plate":
     dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
     kernel_matrix = 0.5 * dist_sq_matrix * torch.log(dist_sq_matrix)
 elif kernel == "logarithmic":
-    # not working so far
     dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
     kernel_matrix = 0.5 * torch.log(dist_sq_matrix)
 

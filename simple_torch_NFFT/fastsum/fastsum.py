@@ -77,9 +77,6 @@ class Fastsum(torch.nn.Module):
             basis_f = lambda x, scale: thin_plate_f(x, scale, C, self.dim)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
         elif kernel == "logarithmic":
-            raise NameError(
-                "The logarithmic kernel is currently not (correctly) implemented!"
-            )
             C = compute_logarithmic_constant(self.dim)
             basis_f = lambda x, scale: logarithmic_f(x, scale, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)

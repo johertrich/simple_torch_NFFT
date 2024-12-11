@@ -18,6 +18,7 @@ The implementation currently supports the following kernels:
 - The `Matern` kernel given by $K(x,y)=\frac{2^{1-\nu}}{\Gamma(\nu)}(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)^\nu K_\nu(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)$, where $K_\nu$ is the modified Bessel function of second kind. The kernel depends on a smoothness parameter $\nu$ which determines its smoothness. For $\nu=\frac12$, we obtain the Laplace kernel and for $\nu\to\infty$, the Matern kernel converges towards the Gauss kernel.
 - The `energy` kernel given by $K(x,y)=-\frac{1}{\sigma}\\|x-y\\|$.
 - The `thin_plate` spline kernel is given by $K(x,y)=\frac{\\|x-y\\|^2}{\sigma^2}\log(\frac{\\|x-y\\|}{\sigma})$.
+- The `logarithmic` kernel is given by $K(x,y)=\log(\frac{\|x-y\|}{\sigma})$. For this kernel holds that $K(x,y)\to-\infty$ for $x-y\to0$. Therefore, the fast Fourier summation requires significantly more Fourier coefficients then for the other kernels (e.g., `n_ft=65536` for a relative error up to `3e-3`). A better treatment of this issue is implemented in the [NFFT3 library](https://www-user.tu-chemnitz.de/~potts/nfft/).
 
 
 ## Usage and Example

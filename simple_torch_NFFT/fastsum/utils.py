@@ -3,6 +3,9 @@ import numpy as np
 import scipy
 import mpmath
 
+mpmath.mp.dps = 25
+mpmath.mp.pretty = True
+
 
 def get_median_distance(x, y, batch_size=1000):
     perm1 = torch.randperm(x.shape[0])[:batch_size]
@@ -43,11 +46,9 @@ def compute_thin_plate_constant(d):
 
 
 def compute_logarithmic_constant(d):
-    mpmath.mp.dps = 25
-    mpmath.mp.pretty = True
     other_factor = (
         2
         * np.exp(scipy.special.loggamma(d / 2) - scipy.special.loggamma((d - 1) / 2))
         / np.sqrt(np.pi)
     )
-    return other_factor * float(mpmath.hyp3f2(0.5, 0.5, -0.5 * (d - 3), 1.5, 1.5, 1))
+    return -other_factor * float(mpmath.hyp3f2(0.5, 0.5, -0.5 * (d - 3), 1.5, 1.5, 1))
