@@ -1,5 +1,11 @@
 import torch
-from .basis_funs import Gaussian_kernel_fun_ft, Matern_kernel_fun_ft
+from .basis_funs import (
+    Gaussian_kernel_fun_ft,
+    Matern_kernel_fun_ft,
+    f_fun_ft,
+    thin_plate_f,
+    logarithmic_f,
+)
 from .functional import (
     fastsum_fft,
     fastsum_fft_precomputations,
@@ -8,7 +14,11 @@ from .functional import (
     fast_energy_summation,
 )
 from simple_torch_NFFT import NFFT
-from .utils import compute_sliced_factor
+from .utils import (
+    compute_sliced_factor,
+    compute_thin_plate_constant,
+    compute_logarithmic_constant,
+)
 import importlib.resources
 import h5py
 import numpy as np
@@ -62,11 +72,30 @@ class Fastsum(torch.nn.Module):
         elif kernel == "energy":
             self.energy_kernel = True
             self.sliced_factor = compute_sliced_factor(self.dim)
+        elif kernel == "thin_plate":
+            C = compute_thin_plate_constant(self.dim)
+            basis_f = lambda x, scale: thin_plate_f(x, scale, C, self.dim)
+            self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
+        elif kernel == "logarithmic":
+            raise NameError(
+                "The logarithmic kernel is currently not (correctly) implemented!"
+            )
+            C = compute_logarithmic_constant(self.dim)
+            basis_f = lambda x, scale: logarithmic_f(x, scale, C)
+            self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
         elif kernel == "other":
             assert (
                 "fourier_fun" in kernel_params.keys()
+                or "basis_f" in kernel_params.keys()
             ), "For custom kernels the Fourier transform of the 1D kernel must be contained in kernel_params"
-            self.fourier_fun = kernel_params["fourier_fun"]
+            if "fourier_fun" in kernel_params.keys():
+                self.fourier_fun = kernel_params["fourier_fun"]
+            else:
+                self.fourier_fun = lambda x, scale: f_fun_ft(
+                    x, scale, kernel_params["basis_f"]
+                )
+        else:
+            raise NameError("Kernel not found!")
 
         if nfft is None and not self.energy_kernel:
             self.nfft = NFFT((n_ft,), m=2, device=device, no_compile=no_compile)

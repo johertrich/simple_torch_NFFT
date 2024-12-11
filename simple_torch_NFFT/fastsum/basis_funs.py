@@ -45,3 +45,23 @@ def Matern_kernel_fun_ft(grid1d, d, beta, nu):
     else:
         out[args == 0] = torch.exp(log_factor)
     return out
+
+
+def f_fun_ft(grid1d, scale, f):
+    n_ft = grid1d.shape[0]
+    vect = f(torch.abs(grid1d / n_ft), scale)
+    vect_perm = torch.fft.ifftshift(vect)
+    kernel_ft = 1 / n_ft * torch.fft.fftshift(torch.fft.fft(vect_perm))
+    return kernel_ft
+
+
+def thin_plate_f(x, scale, C, d):
+    out = d * (x / scale) ** 2 * torch.log(x / scale) - C * (x / scale) ** 2
+    out = torch.where(x == 0, torch.zeros_like(out), out)
+    return out
+
+
+def logarithmic_f(x, scale, C):
+    out = torch.log(x / scale) - C
+    out = torch.maximum(out, torch.tensor(-10.0, device=x.device, dtype=torch.float))
+    return out

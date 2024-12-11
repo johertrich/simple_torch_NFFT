@@ -18,9 +18,11 @@ with required argument
 
 and optional keyword arguments
 
-- `kernel="Gauss"`: string. Name of the used kernel. Possible choices are `"Gauss"`, `"Laplace"`, `"Matern"` and `"energy"`. See the [Overview](overview.md) page for a description of the kernels. For using a custom kernel, pass `"other"` and define a `kernel_params["fourier_fun"]` argument with a function handle of the Fourier transform of the one-dimensional kernel (the use of other kernels is to be simplified in the future).
+- `kernel="Gauss"`: string. Name of the used kernel. Possible choices are `"Gauss"`, `"Laplace"`, `"Matern"`, `"energy"` and `"thin_plate"`. See the [Overview](overview.md) page for a description of the kernels. For using a custom kernel, pass `"other"` and one of the following arguments in the `kernel_params` dictionary:
+    - `kernel_params["fourier_fun"]`: must be a function handle of the Fourier transform of the one-dimensional kernel (i.e., the Fourier transform of $f$ in the [background page](background.md))
+    - `kernel_params["basis_f"]`: must be a function handle with the basis function of the one-dimensional kernel (i.e., the function $f$ in the [background page](background.md))
 - `kernel_params=dict()`: `dict`. An additional dictionary with kernel parameters. This does not contain the scale/bandwidth parameter, but additional parameters like the smoothness parameter `nu` for the Matern kernel.
-- `slicing_mode="iid"`: string. Selection of the slicing directions $\xi$. Available choices are:
+- `slicing_mode=None`: string. Selection of the slicing directions $\xi$. The default value is `"spherical_design"` for $d\in\\{3,4\\}$, `"distance"` for $d \leq 100$ but $d\not\in\\{3,4\\}$ and `"orthogonal"` otherwise. Available choices are:
 	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere.
 	- `"orthogonal"`: Chooses the directions $\xi_p$ to be a random orthogonal system when $P\le d$. If $P>d$, we choose several independently drawn sets of random orthogonal systems. See [orthogonal random features](https://arxiv.org/abs/1610.09072) (in a random features setting) for details.
 	- `"Sobol"`: Use the first $P$ entries of a Sobol sequence, transform them by the inverse cdf of a normal distribution and project it onto a sphere.
