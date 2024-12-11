@@ -10,7 +10,7 @@ authors = [{ name = "Johannes Hertrich", email = "j.hertrich@ucl.ac.uk" }]
 license = { text = "MIT" }
 readme = "readme.md"
 requires-python = ">=3.9"
-dependencies = ["torch", "h5py"]
+dependencies = ["torch", "h5py", "scipy", "mpmath"]
 
 [tool.setuptools.package-data]
 simple_torch_NFFT = ["data/*.h5"]

@@ -8,6 +8,7 @@ mpmath.mp.pretty = True
 
 
 def get_median_distance(x, y, batch_size=1000):
+    # Choose scale parameter of kernels by the mdeian rule.
     perm1 = torch.randperm(x.shape[0])[:batch_size]
     perm2 = torch.randperm(y.shape[0])[:batch_size]
     dists = torch.sqrt(
@@ -31,6 +32,7 @@ def compute_sliced_factor(d):
 
 
 def compute_thin_plate_constant(d):
+    # Compute the constant from the thin-plate spline kernel.
     if d % 2 == 0:
         mysum = 0.0
         for k in range(1, d // 2 + 1):
@@ -46,9 +48,19 @@ def compute_thin_plate_constant(d):
 
 
 def compute_logarithmic_constant(d):
+    # Compute the constant from the logarithmic kernel
     other_factor = (
         2
         * np.exp(scipy.special.loggamma(d / 2) - scipy.special.loggamma((d - 1) / 2))
         / np.sqrt(np.pi)
     )
     return -other_factor * float(mpmath.hyp3f2(0.5, 0.5, -0.5 * (d - 3), 1.5, 1.5, 1))
+
+
+def compute_Riesz_factor(d, r):
+    # Compute the slicing constant within the Riesz kernel
+    return np.exp(
+        scipy.special.loggamma((d + r) / 2)
+        - scipy.special.loggamma(d / 2)
+        - scipy.special.loggamma((r + 1) / 2)
+    ) * np.sqrt(np.pi)

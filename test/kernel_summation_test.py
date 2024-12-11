@@ -6,7 +6,14 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch._dynamo.config.cache_size_limit = 1024
 
 d = 4
-kernel = "logarithmic"
+kernel = "Riesz"
+kernel_params = {}
+if kernel == "Riesz":
+    # choose exponent r for Riesz kernel
+    kernel_params["r"] = 1.5
+if kernel == "Matern":
+    # choose smoothness parameter nu for Matern kernel
+    kernel_params["nu"] = 1.5
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
@@ -14,6 +21,8 @@ kernel = "logarithmic"
 # higher value for rougher kernel and higher dimension
 n_ft = 1024
 if kernel == "logarithmic":
+    # the logarithmic kernel requires significantly more Fourier coefficients
+    # than other kernels since K(x,y) -> -infty for x-y -> 0.
     n_ft = n_ft * 64
 
 # number of projections to test
@@ -50,6 +59,9 @@ elif kernel == "thin_plate":
 elif kernel == "logarithmic":
     dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
     kernel_matrix = 0.5 * torch.log(dist_sq_matrix)
+elif kernel == "Riesz":
+    dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
+    kernel_matrix = -(dist_sq_matrix ** (kernel_params["r"] / 2))
 
 s_naive = kernel_matrix @ x_weights
 
@@ -60,7 +72,12 @@ else:
 
 for slicing_mode in slicing_modes:
     fastsum = Fastsum(
-        d, kernel=kernel, n_ft=n_ft, batched_autodiff=False, slicing_mode=slicing_mode
+        d,
+        kernel=kernel,
+        n_ft=n_ft,
+        kernel_params=kernel_params,
+        batched_autodiff=False,
+        slicing_mode=slicing_mode,
     )
     for P in Ps:
         s_sliced = fastsum(x, y, x_weights, scale, P)

@@ -15,10 +15,13 @@ The implementation currently supports the following kernels:
 
 - The `Gauss` kernel given by $K(x,y)=\exp(-\frac1{2\sigma^2}\\|x-y\\|^2)$.
 - The `Laplace` kernel given by $K(x,y)=\exp(-\frac1{\sigma}\\|x-y\\|)$. In the literature, the parameter $\sigma$ is often replaced by $\frac{1}{\alpha}$. However, we stick to the above notation to handle the scale parameter similarly for all kernels.
-- The `Matern` kernel given by $K(x,y)=\frac{2^{1-\nu}}{\Gamma(\nu)}(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)^\nu K_\nu(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)$, where $K_\nu$ is the modified Bessel function of second kind. The kernel depends on a smoothness parameter $\nu$ which determines its smoothness. For $\nu=\frac12$, we obtain the Laplace kernel and for $\nu\to\infty$, the Matern kernel converges towards the Gauss kernel.
+- The `Matern` kernel given by $K(x,y)=\frac{2^{1-\nu}}{\Gamma(\nu)}(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)^\nu K_\nu(\tfrac{\sqrt{2\nu}}{\sigma}\\|x-y\\|)$, where $K_\nu$ is the modified Bessel function of second kind. The kernel depends on a smoothness parameter $\nu$ which determines its smoothness. The value of $\nu$ has to be passed within the `kernel_params` dictionary (`kernel_params["nu"]=nu`). For $\nu=\frac12$, we obtain the Laplace kernel and for $\nu\to\infty$, the Matern kernel converges towards the Gauss kernel.
 - The `energy` kernel given by $K(x,y)=-\frac{1}{\sigma}\\|x-y\\|$.
+- The `Riesz` kernel is given by $K(x,y)=-\frac{\\|x-y\\|^r}{\sigma^r}$ for some exponent $r\in(-1,\infty)$. For $r=1$ we resemble the energy kernel. The exponent $r$ has to be passed within the `kernel_params` dictionary (`kernel_params["r"]=r`). For small values of $r$ (say $r<1$), this kernel becomes very non-smooth at $x=y$. In this case, more Fourier coefficients in the fast Fourier summation might be required (which can be adjusted via the keyword argument `n_ft` in the constructor of the `Fastsum` object).
 - The `thin_plate` spline kernel is given by $K(x,y)=\frac{\\|x-y\\|^2}{\sigma^2}\log(\frac{\\|x-y\\|}{\sigma})$.
-- The `logarithmic` kernel is given by $K(x,y)=\log(\frac{\|x-y\|}{\sigma})$. For this kernel holds that $K(x,y)\to-\infty$ for $x-y\to0$. Therefore, the fast Fourier summation requires significantly more Fourier coefficients then for the other kernels (e.g., `n_ft=65536` for a relative error up to `3e-3`). A better treatment of this issue is implemented in the [NFFT3 library](https://www-user.tu-chemnitz.de/~potts/nfft/).
+- The `logarithmic` kernel is given by $K(x,y)=\log(\frac{\\|x-y\\|}{\sigma})$. This kernel is singular for `x=y`. Therefore, the fast Fourier summation requires significantly more Fourier coefficients then for the other kernels (e.g., `n_ft=65536` for a relative error up to `3e-3`). 
+
+Note: A better treatment for kernels which are non-smooth or singular at $x=y$ is implemented in the [NFFT3 library](https://www-user.tu-chemnitz.de/~potts/nfft/).
 
 
 ## Usage and Example
@@ -66,6 +69,5 @@ kernel_sum = fastsum(x, y, x_weights, scale, P) # compute kernel sum
 
 In the future, I want to add:
 
-- other kernels (thin plate spline, logarithmic)
 - 1D Summation via KeOps as alternative to NFFT (could be useful in particular, when we are considering a low number of (relevant) Fourier features like, e.g., in the Gaussian kernel)
 - for $d=2$ and $d=3$: add fast Fourier summation (without slicing)

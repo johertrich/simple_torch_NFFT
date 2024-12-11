@@ -24,6 +24,8 @@ def Gaussian_kernel_fun_ft(grid, d, sigma_sq):
 
 
 def Matern_kernel_fun_ft(grid1d, d, beta, nu):
+    # implementation of the Fourier transform of the one-dimensional counterpart of the Matern kernel
+    # for numerical stability computations are done in the log-space
     k = grid1d
     args = k**2
     log_args = torch.log(args)
@@ -48,6 +50,7 @@ def Matern_kernel_fun_ft(grid1d, d, beta, nu):
 
 
 def f_fun_ft(grid1d, scale, f):
+    # compute Fourier coefficients of some basis function f via the fft
     n_ft = grid1d.shape[0]
     vect = f(torch.abs(grid1d / n_ft), scale)
     vect_perm = torch.fft.ifftshift(vect)
@@ -56,12 +59,18 @@ def f_fun_ft(grid1d, scale, f):
 
 
 def thin_plate_f(x, scale, C, d):
+    # basis function of the one-dimensional counterpart of the thin-plate spline kernel
     out = d * (x / scale) ** 2 * torch.log(x / scale) - C * (x / scale) ** 2
     out = torch.where(x == 0, torch.zeros_like(out), out)
     return out
 
 
 def logarithmic_f(x, scale, C):
+    # basis function of the one-dimensional counterpart of the logarithmic kernel
     out = torch.log(x / scale) - C
     out = torch.maximum(out, torch.tensor(-10.0, device=x.device, dtype=torch.float))
     return out
+
+
+def Riesz_f(x, scale, r, C):
+    return -C * torch.abs(x) ** r / scale**r

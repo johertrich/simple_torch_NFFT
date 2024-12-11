@@ -5,6 +5,7 @@ from .basis_funs import (
     f_fun_ft,
     thin_plate_f,
     logarithmic_f,
+    Riesz_f,
 )
 from .functional import (
     fastsum_fft,
@@ -18,6 +19,7 @@ from .utils import (
     compute_sliced_factor,
     compute_thin_plate_constant,
     compute_logarithmic_constant,
+    compute_Riesz_factor,
 )
 import importlib.resources
 import h5py
@@ -79,6 +81,11 @@ class Fastsum(torch.nn.Module):
         elif kernel == "logarithmic":
             C = compute_logarithmic_constant(self.dim)
             basis_f = lambda x, scale: logarithmic_f(x, scale, C)
+            self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
+        elif kernel == "Riesz":
+            r = kernel_params["r"]
+            C = compute_Riesz_factor(self.dim, r)
+            basis_f = lambda x, scale: Riesz_f(x, scale, r, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
         elif kernel == "other":
             assert (
