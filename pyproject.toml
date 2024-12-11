@@ -15,3 +15,5 @@ dependencies = ["torch", "h5py", "scipy", "mpmath"]
 [tool.setuptools.package-data]
 simple_torch_NFFT = ["data/*.h5"]
 
+[project.optional-dependencies]
+keops = ["pykeops"]

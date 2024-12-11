@@ -6,6 +6,13 @@ from .basis_funs import (
     thin_plate_f,
     logarithmic_f,
     Riesz_f,
+    Gauss_F,
+    Laplace_F,
+    energy_F,
+    thin_plate_F,
+    logarithmic_F,
+    Riesz_F,
+    Matern_F,
 )
 from .functional import (
     fastsum_fft,
@@ -27,6 +34,14 @@ import numpy as np
 import urllib.request
 import os
 import hashlib
+
+try:
+    import pykeops
+
+    no_keops = False
+except:
+    pykeops = ImportError("PyKeops is not installed.")
+    no_keops = True
 
 
 class Fastsum(torch.nn.Module):
@@ -54,11 +69,13 @@ class Fastsum(torch.nn.Module):
         self.device = device
         self.energy_kernel = False
         self.dim = dim
+        self.basis_F = None
 
         if kernel == "Gauss":
             self.fourier_fun = lambda x, scale: Gaussian_kernel_fun_ft(
                 x, self.dim, scale**2
             )
+            self.basis_F = Gauss_F
         elif kernel == "Matern":
             assert (
                 "nu" in kernel_params.keys()
@@ -67,26 +84,32 @@ class Fastsum(torch.nn.Module):
             self.fourier_fun = lambda x, scale: Matern_kernel_fun_ft(
                 x, self.dim, scale, nu
             )
+            self.basis_F = lambda x, scale: Matern_F(x, scale, nu, device)
         elif kernel == "Laplace":
             self.fourier_fun = lambda x, scale: Matern_kernel_fun_ft(
                 x, self.dim, scale, 0.5
             )
+            self.basis_F = Laplace_F
         elif kernel == "energy":
             self.energy_kernel = True
             self.sliced_factor = compute_sliced_factor(self.dim)
+            self.basis_F = energy_F
         elif kernel == "thin_plate":
             C = compute_thin_plate_constant(self.dim)
             basis_f = lambda x, scale: thin_plate_f(x, scale, C, self.dim)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
+            self.basis_F = thin_plate_F
         elif kernel == "logarithmic":
             C = compute_logarithmic_constant(self.dim)
             basis_f = lambda x, scale: logarithmic_f(x, scale, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
+            self.basis_F = logarithmic_F
         elif kernel == "Riesz":
             r = kernel_params["r"]
             C = compute_Riesz_factor(self.dim, r)
             basis_f = lambda x, scale: Riesz_f(x, scale, r, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
+            self.basis_F = lambda x, scale: Riesz_F(x, scale, r)
         elif kernel == "other":
             assert (
                 "fourier_fun" in kernel_params.keys()
@@ -100,11 +123,6 @@ class Fastsum(torch.nn.Module):
                 )
         else:
             raise NameError("Kernel not found!")
-
-        if nfft is None and not self.energy_kernel:
-            self.nfft = NFFT((n_ft,), m=2, device=device, no_compile=no_compile)
-        else:
-            self.nfft = nfft
 
         if slicing_mode is None:
             if self.dim in [3, 4]:
@@ -207,6 +225,11 @@ class Fastsum(torch.nn.Module):
                 )
                 slicing_mode = "orthogonal"
 
+        if nfft is None and not self.energy_kernel:
+            self.nfft = NFFT((n_ft,), m=2, device=device, no_compile=no_compile)
+        else:
+            self.nfft = nfft
+
         self.slicing_mode = slicing_mode
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
@@ -247,6 +270,21 @@ class Fastsum(torch.nn.Module):
         else:
             raise NotImplementedError("Unknown slicing mode!")
         return xis
+
+    def naive(self, x, y, x_weights, scale):
+        assert self.basis_F is not None, "Basis function of the kernel not given!"
+        if not no_keops:
+            y = pykeops.torch.LazyTensor(y[None, :, :])
+            x = pykeops.torch.LazyTensor(x[:, None, :])
+            x_weights = pykeops.torch.LazyTensor(x_weights[:, None], axis=0)
+        else:
+            y = y[None, :, :]
+            x = x[:, None, :]
+            x_weights = x_weights[:, None]
+        distance_mat = ((x - y) ** 2).sum(-1).sqrt()
+        kernel_mat = self.basis_F(distance_mat, scale)
+        kernel_sum = (kernel_mat * x_weights).sum(0).squeeze()
+        return kernel_sum
 
     def forward(self, x, y, x_weights, scale, xis_or_P):
         if isinstance(xis_or_P, int):

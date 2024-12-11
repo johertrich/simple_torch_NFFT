@@ -6,14 +6,14 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch._dynamo.config.cache_size_limit = 1024
 
 d = 4
-kernel = "Riesz"
+kernel = "Matern"
 kernel_params = {}
 if kernel == "Riesz":
     # choose exponent r for Riesz kernel
     kernel_params["r"] = 1.5
 if kernel == "Matern":
     # choose smoothness parameter nu for Matern kernel
-    kernel_params["nu"] = 1.5
+    kernel_params["nu"] = 3.5
 
 # number of Fourier coefficients to truncate,
 # so far this value has to be chosen by hand,
@@ -40,30 +40,9 @@ x_weights = torch.ones(x.shape[0]).to(x)
 med = get_median_distance(x, y)
 scale = med
 
-# compute naive kernel sum:
-if kernel == "Gauss":
-    kernel_matrix = torch.exp(
-        -0.5 * torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
-    )
-elif kernel == "Laplace":
-    kernel_matrix = torch.exp(
-        -torch.sqrt(torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1)) / scale
-    )
-elif kernel == "energy":
-    kernel_matrix = (
-        -torch.sqrt(torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1)) / scale
-    )
-elif kernel == "thin_plate":
-    dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
-    kernel_matrix = 0.5 * dist_sq_matrix * torch.log(dist_sq_matrix)
-elif kernel == "logarithmic":
-    dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
-    kernel_matrix = 0.5 * torch.log(dist_sq_matrix)
-elif kernel == "Riesz":
-    dist_sq_matrix = torch.sum((x[None, :, :] - y[:, None, :]) ** 2, -1) / scale**2
-    kernel_matrix = -(dist_sq_matrix ** (kernel_params["r"] / 2))
-
-s_naive = kernel_matrix @ x_weights
+# compute naive kernel sum
+fastsum = Fastsum(d, kernel=kernel, kernel_params=kernel_params)
+s_naive = fastsum.naive(x, y, x_weights, scale)
 
 if d in [3, 4]:
     slicing_modes = ["iid", "orthogonal", "Sobol", "distance", "spherical_design"]
@@ -76,7 +55,6 @@ for slicing_mode in slicing_modes:
         kernel=kernel,
         n_ft=n_ft,
         kernel_params=kernel_params,
-        batched_autodiff=False,
         slicing_mode=slicing_mode,
     )
     for P in Ps:

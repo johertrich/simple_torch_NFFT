@@ -73,4 +73,56 @@ def logarithmic_f(x, scale, C):
 
 
 def Riesz_f(x, scale, r, C):
-    return -C * torch.abs(x) ** r / scale**r
+    return -C * x.abs() ** r / scale**r
+
+
+def Gauss_F(x, scale):
+    return (-0.5 / scale**2 * x**2).exp()
+
+
+def Laplace_F(x, scale):
+    return (-x.abs() / scale).exp()
+
+
+def energy_F(x, scale):
+    return -x.abs() / scale
+
+
+def thin_plate_F(x, scale):
+    return (x / scale) ** 2 * (x.abs() / scale).log()
+
+
+def logarithmic_F(x, scale):
+    return (x.abs() / scale).log()
+
+
+def Riesz_F(x, scale, r):
+    return -((x.abs() / scale) ** r)
+
+
+def Matern_F(x, scale, nu, device):
+    assert (
+        (nu - 1 / 2) % 1
+    ) == 0, (
+        "Matern basis functions are only implmented for nu = p + 1/2 with integral p"
+    )
+    p = int(nu)
+    p_ten = torch.tensor(p, dtype=torch.float, device=device)
+    x_norm = x.abs() / scale
+    summands = 0
+    for n in range(p + 1):
+        factor = torch.tensor(
+            scipy.special.factorial(p + n)
+            / (scipy.special.factorial(n) * scipy.special.factorial(p - n)),
+            dtype=torch.float32,
+            device=device,
+        )
+        add = factor * (4 * (2 * p + 1) * x_norm**2) ** ((p - n) / 2)
+        summands = summands + add
+    factor = torch.tensor(
+        scipy.special.factorial(p) / scipy.special.factorial(2 * p),
+        dtype=torch.float32,
+        device=device,
+    )
+    prefactor = factor * (-torch.sqrt(2 * p_ten + 1) * x_norm).exp()
+    return prefactor * summands

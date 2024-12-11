@@ -43,7 +43,7 @@ and output
 
 - `f`: `torch.Tensor`. Function values on the nonequspaced grid specified by the input `x`. It has size `(batch_dims,M)`, where `batch_dims` is the broadcasted size of the batch dimensions of the two input arguments.
 
-Finally, the `NFFT` object has method
+Finally, the `NFFT` object has a method
 ```
 f_hat = nfft.adjoint(x, f)
 ```

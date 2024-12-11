@@ -37,6 +37,27 @@ and optional keyword arguments
 - `no_compile=False`: boolean. Set to True for not using `torch.compile` in the NFFT. This makes the execution significantly slower, but can be useful for debugging since one gets a useful stacktrace.
 - `batched_autodiff=True`: boolean. If set to `True`, we define a custom backward pass which computes the derivative again as fast kernel summation (and therefore avoids tracing through all slices in the forward pass). This heavily reduces the required memory for automatic differentiation and might be faster. If the value is set to `False`, we do not define a custom backward pass (and hence use standard autodiff).
 
+The forward method is given by
+```
+s = fastsum(x, y, x_weights, scale, xis_or_P) # coincides with fastsum.forward(x, y, x_weights, scale, xis_or_P)
+```
+with required arguments:
+
+- `x`: `torch.Tensor`. Input points `x` of shape `(N,d)`
+- `y`: `torch.Tensor`. Output points `y` of shape `(M,d)`
+- `x_weights`: `torch.Tensor`: weights $w_n$ for the input points of shape `(N,)`
+- `xis_or_P`: int or `torch.Tensor`. If it is a tensor, then it should contain the slicing directions and should be of shape `(P,d)`. Alternatively, one can just pass the number `P` of slices. In this case the slices will be computed by the slicing rule accordingly to the `slicing_mode` argument in the constructor.
+
+and output
+
+- `s`: `torch.Tensor`. Kernel sum of shape `(M,)`.
+
+Finally, the `Fastsum` object has a method
+```
+s = fastsum.naive(x, y, x_weights, scale)
+```
+where the arguments `x`, `y`, `x_weights` and `scale` and the output `s` are the same as in the forward method. It computes the kernel sum naively. If it is installed, the package `pykeops` is used (otherwise a naive torch implementation).
+
 ## `simple_torch_NFFT.fastsum.get_median_distance`
 
 A small helper function for computing kernel parameters by the median rule. The function can be called by
