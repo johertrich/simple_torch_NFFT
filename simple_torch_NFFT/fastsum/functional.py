@@ -1,4 +1,6 @@
 import torch
+from simple_torch_NFFT import NFFT
+import pykeops
 
 
 def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_sum):
@@ -10,6 +12,23 @@ def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_sum)
         )
     else:
         return torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
+
+
+def fast_fourier_summation_keops(x_proj, y_proj, x_weights, h, kernel_ft, take_sum):
+    # use keops instead of nfft
+    x_proj = pykeops.torch.LazyTensor(x_proj.unsqueeze(1))
+    h = pykeops.torch.LazyTensor(h.unsqueeze(0).unsqueeze(2))
+    x_weights = pykeops.torch.LazyTensor(x_weights.unsqueeze(0).unsqueeze(1))
+    kernel_ft = pykeops.torch.LazyTensor(kernel_ft.unsqueeze(-1), axis=1)
+    y_proj = pykeops.torch.LazyTensor(y_proj, axis=0)
+    a = ((-2 * torch.pi * 1j * h * x_proj).exp() * x_weights).sum(-1)
+    a_time_kernel = a * kernel_ft
+    out_kernel_summation = torch.real(
+        ((2 * torch.pi * 1j * h * y_proj).exp() * a_time_kernel).sum(1)
+    )
+    if take_sum:
+        out_kernel_summation = torch.sum(out_kernel_summation, 0, keepdim=True)
+    return out_kernel_summation
 
 
 def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
@@ -148,25 +167,37 @@ def fastsum_fft(
         kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
 
     xi = xis.unsqueeze(1)
+    keops_summation = not isinstance(nfft, NFFT)
+    if keops_summation:
+        take = torch.abs(kernel_ft) > 1e-5
+        h = h[take].to(torch.float32)
+        kernel_ft = kernel_ft[take]
 
     def with_projections(xi):
         P_local = xi.shape[0]
-        x_proj = (xi @ x.T).reshape(P_local, 1, -1, 1)
-        y_proj = (xi @ y.T).reshape(P_local, 1, -1, 1)
-        outs = torch.cat(
-            [
-                fast_fourier_summation(
-                    x_proj[i * batch_size_nfft : (i + 1) * batch_size_nfft],
-                    y_proj[i * batch_size_nfft : (i + 1) * batch_size_nfft],
-                    x_weights,
-                    kernel_ft,
-                    nfft,
-                    take_sum=not derivative,
-                )
-                for i in range(((P_local - 1) // batch_size_nfft) + 1)
-            ],
-            0,
-        )
+        if keops_summation:
+            x_proj = (xi @ x.T).reshape(P_local, -1)
+            y_proj = (xi @ y.T).reshape(P_local, -1)
+            outs = fast_fourier_summation_keops(
+                x_proj, y_proj, x_weights, h, kernel_ft, take_sum=not derivative
+            )
+        else:
+            x_proj = (xi @ x.T).reshape(P_local, 1, -1, 1)
+            y_proj = (xi @ y.T).reshape(P_local, 1, -1, 1)
+            outs = torch.cat(
+                [
+                    fast_fourier_summation(
+                        x_proj[i * batch_size_nfft : (i + 1) * batch_size_nfft],
+                        y_proj[i * batch_size_nfft : (i + 1) * batch_size_nfft],
+                        x_weights,
+                        kernel_ft,
+                        nfft,
+                        take_sum=not derivative,
+                    )
+                    for i in range(((P_local - 1) // batch_size_nfft) + 1)
+                ],
+                0,
+            )
 
         if derivative:
             return (

@@ -235,6 +235,7 @@ class Fastsum(torch.nn.Module):
         self.batch_size_nfft = batch_size_nfft
         self.x_range = x_range
         self.batched_autodiff = batched_autodiff
+        self.n_ft = n_ft
 
     def get_xis(self, P, device):
         if self.slicing_mode == "iid":
@@ -324,7 +325,7 @@ class Fastsum(torch.nn.Module):
                     y,
                     x_weights,
                     scale,
-                    self.nfft.N[0],
+                    self.n_ft,
                     self.x_range,
                     self.fourier_fun,
                     xis,
@@ -343,7 +344,7 @@ class Fastsum(torch.nn.Module):
                 )
             else:
                 x, y, kernel_ft, h, _ = fastsum_fft_precomputations(
-                    x, y, scale, self.x_range, self.fourier_fun, self.nfft.N[0]
+                    x, y, scale, self.x_range, self.fourier_fun, self.n_ft
                 )
                 out = fastsum_fft(
                     x,
