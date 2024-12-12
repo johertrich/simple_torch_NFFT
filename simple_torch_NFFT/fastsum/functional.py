@@ -12,7 +12,7 @@ def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_sum)
         return torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
 
 
-def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
+def fastsum_fft_precomputations(x, y, scale, x_range):
     xy_norm = torch.sqrt(torch.sum(torch.cat((x, y), 0) ** 2, -1))
     max_norm = torch.max(xy_norm)
 
@@ -20,15 +20,12 @@ def fastsum_fft_precomputations(x, y, scale, x_range, fourier_fun, n_ft):
     scale_max = 0.1
     if scale * scale_factor > scale_max:
         scale_factor = scale_max / scale
-    scale_real = scale * scale_factor
     x = x * scale_factor
     y = y * scale_factor
-    h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
-    kernel_ft = fourier_fun(h, scale_real)  # Gaussian_kernel_fun_ft(h,d,scale_real**2)
-    return x, y, kernel_ft, h, scale_factor
+    return x, y, scale_factor
 
 
-class FastsumFFTAutograd(torch.autograd.Function):
+class SlicedFastsumFFTAutograd(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -44,14 +41,14 @@ class FastsumFFTAutograd(torch.autograd.Function):
         batch_size_P=None,
         batch_size_nfft=None,
     ):
-        x, y, kernel_ft, h, scale_factor = fastsum_fft_precomputations(
-            x, y, scale, x_range, fourier_fun, n_ft
-        )
+        x, y, scale_factor = fastsum_fft_precomputations(x, y, scale, x_range)
+        h = torch.arange((-n_ft + 1) // 2, (n_ft + 1) // 2, device=x.device)
+        kernel_ft = fourier_fun(h, scale * scale_factor)
         ctx.save_for_backward(x, y, x_weights, kernel_ft, h, xis, scale_factor)
         ctx.nfft = nfft
         ctx.batch_size_P = batch_size_P
         ctx.batch_size_nfft = batch_size_nfft
-        return fastsum_fft(
+        return sliced_fastsum_fft(
             x,
             y,
             x_weights,
@@ -69,7 +66,7 @@ class FastsumFFTAutograd(torch.autograd.Function):
         x, y, x_weights, kernel_ft, h, xis, scale_factor = ctx.saved_tensors
         grad_x, grad_y, grad_x_weights = None, None, None
         if ctx.needs_input_grad[0]:
-            grad_x = fastsum_fft(
+            grad_x = sliced_fastsum_fft(
                 y,
                 x,
                 grad_output,
@@ -83,7 +80,7 @@ class FastsumFFTAutograd(torch.autograd.Function):
             )
             grad_x = grad_x * x_weights[:, None] * scale_factor
         if ctx.needs_input_grad[1]:
-            grad_y = fastsum_fft(
+            grad_y = sliced_fastsum_fft(
                 x,
                 y,
                 x_weights,
@@ -97,7 +94,7 @@ class FastsumFFTAutograd(torch.autograd.Function):
             )
             grad_y = grad_y * grad_output[:, None] * scale_factor
         if ctx.needs_input_grad[2]:
-            grad_x_weights = fastsum_fft(
+            grad_x_weights = sliced_fastsum_fft(
                 y,
                 x,
                 grad_output,
@@ -124,7 +121,14 @@ class FastsumFFTAutograd(torch.autograd.Function):
         )
 
 
-def fastsum_fft(
+def fastsum_fft(x, y, x_weights, kernel_ft, nfft):
+    a = nfft.adjoint(-x, x_weights)
+    a_time_kernel = a * kernel_ft
+    out = torch.real(nfft(-y, a_time_kernel))
+    return out
+
+
+def sliced_fastsum_fft(
     x,
     y,
     x_weights,

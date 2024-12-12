@@ -23,6 +23,14 @@ def Gaussian_kernel_fun_ft(grid, d, sigma_sq):
     return out * factor
 
 
+def Gauss_F_ft(grid, d, sigma_sq):
+    # implementation of the Fourier transform of the d-dimensional Gauss kernel
+    return torch.exp(
+        d / 2 * torch.log(2 * np.pi * sigma_sq)
+        - 2 * np.pi**2 * sigma_sq * torch.sum(grid**2, -1)
+    )
+
+
 def Matern_kernel_fun_ft(grid1d, d, beta, nu):
     # implementation of the Fourier transform of the one-dimensional counterpart of the Matern kernel
     # for numerical stability computations are done in the log-space

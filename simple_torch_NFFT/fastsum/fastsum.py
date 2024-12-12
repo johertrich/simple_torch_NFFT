@@ -13,11 +13,13 @@ from .basis_funs import (
     logarithmic_F,
     Riesz_F,
     Matern_F,
+    Gauss_F_ft,
 )
 from .functional import (
+    sliced_fastsum_fft,
     fastsum_fft,
     fastsum_fft_precomputations,
-    FastsumFFTAutograd,
+    SlicedFastsumFFTAutograd,
     FastsumEnergyAutograd,
     fast_energy_summation,
 )
@@ -68,6 +70,7 @@ class Fastsum(torch.nn.Module):
 
         self.device = device
         self.energy_kernel = False
+        self.non_sliced = False
         self.dim = dim
         self.basis_F = None
 
@@ -76,6 +79,7 @@ class Fastsum(torch.nn.Module):
                 x, self.dim, scale**2
             )
             self.basis_F = Gauss_F
+            self.F_fourier_fun = lambda x, scale: Gauss_F_ft(x, self.dim, scale**2)
         elif kernel == "Matern":
             assert (
                 "nu" in kernel_params.keys()
@@ -138,6 +142,7 @@ class Fastsum(torch.nn.Module):
             "orthogonal",
             "Sobol",
             "distance",
+            "non-sliced",
         ], "Unknown slicing mode"
         if slicing_mode == "spherical_design":
             if self.dim in [3, 4]:
@@ -224,9 +229,19 @@ class Fastsum(torch.nn.Module):
                     "Precomputed distance slices are only available for d<=100! Therefore orthogonal slices are used!"
                 )
                 slicing_mode = "orthogonal"
+        if slicing_mode == "non-sliced":
+            assert (
+                kernel == "Gauss"
+            ), "Non-sliced fast Fourier summation is just implemented for the Gauss kernel so far"
+            self.non_sliced = True
 
         if nfft is None and not self.energy_kernel:
-            self.nfft = NFFT((n_ft,), m=2, device=device, no_compile=no_compile)
+            if self.non_sliced:
+                self.nfft = NFFT(
+                    tuple([n_ft] * self.dim), m=2, device=device, no_compile=no_compile
+                )
+            else:
+                self.nfft = NFFT((n_ft,), m=2, device=device, no_compile=no_compile)
         else:
             self.nfft = nfft
 
@@ -286,29 +301,30 @@ class Fastsum(torch.nn.Module):
         kernel_sum = (kernel_mat * x_weights).sum(0).squeeze()
         return kernel_sum
 
-    def forward(self, x, y, x_weights, scale, xis_or_P):
-        if isinstance(xis_or_P, int):
-            P = xis_or_P
-            xis = None
-        if isinstance(xis_or_P, torch.Tensor):
-            xis = xis_or_P
-            P = None
-        if xis is None and P is None:
-            raise ValueError(
-                "either P (number of slices) or xis (Tensor containing slices) must be specified"
+    def forward(self, x, y, x_weights, scale, xis_or_P=None):
+        if not self.non_sliced:
+            if isinstance(xis_or_P, int):
+                P = xis_or_P
+                xis = None
+            if isinstance(xis_or_P, torch.Tensor):
+                xis = xis_or_P
+                P = None
+            if xis is None and P is None:
+                raise ValueError(
+                    "either P (number of slices) or xis (Tensor containing slices) must be specified"
+                )
+            if xis is not None:
+                P = xis.shape[0]
+            batch_size_P = P if self.batch_size_P is None else self.batch_size_P
+            batch_size_nfft = (
+                batch_size_P if self.batch_size_nfft is None else self.batch_size_nfft
             )
-        if xis is not None:
-            P = xis.shape[0]
-        batch_size_P = P if self.batch_size_P is None else self.batch_size_P
-        batch_size_nfft = (
-            batch_size_P if self.batch_size_nfft is None else self.batch_size_nfft
-        )
-        if P < batch_size_P:
-            batch_size_P = P
-        if batch_size_nfft > batch_size_P:
-            batch_size_nfft = batch_size_P
-        if xis is None:
-            xis = self.get_xis(P, x.device)
+            if P < batch_size_P:
+                batch_size_P = P
+            if batch_size_nfft > batch_size_P:
+                batch_size_nfft = batch_size_P
+            if xis is None:
+                xis = self.get_xis(P, x.device)
 
         if self.batched_autodiff:
             if self.energy_kernel:
@@ -318,8 +334,10 @@ class Fastsum(torch.nn.Module):
                     )
                     / scale
                 )
+            elif self.non_sliced:
+                raise NotImplementedError()
             else:
-                out = FastsumFFTAutograd.apply(
+                out = SlicedFastsumFFTAutograd.apply(
                     x,
                     y,
                     x_weights,
@@ -341,11 +359,37 @@ class Fastsum(torch.nn.Module):
                     )
                     / scale
                 )
-            else:
-                x, y, kernel_ft, h, _ = fastsum_fft_precomputations(
-                    x, y, scale, self.x_range, self.fourier_fun, self.nfft.N[0]
+            elif self.non_sliced:
+                x, y, scale_factor = fastsum_fft_precomputations(
+                    x, y, scale, self.x_range
                 )
-                out = fastsum_fft(
+                h = torch.arange(
+                    (-self.nfft.N[0] + 1) // 2,
+                    (self.nfft.N[0] + 1) // 2,
+                    device=x.device,
+                )
+                my_shape = [-1] + [1 for _ in range(1, self.dim)]
+                h = h.view(my_shape)
+                my_tile = [1] + [h.shape[0] for _ in range(1, self.dim)]
+                h = h.tile(my_tile)
+                my_mesh = [h.clone()]
+                for i in range(1, self.dim):
+                    my_mesh.append(h.transpose(0, i).clone())
+                my_mesh = torch.stack(my_mesh, -1)
+                kernel_ft = self.F_fourier_fun(my_mesh, scale * scale_factor)
+                out = fastsum_fft(x, y, x_weights, kernel_ft, self.nfft)
+                return out
+            else:
+                x, y, scale_factor = fastsum_fft_precomputations(
+                    x, y, scale, self.x_range
+                )
+                h = torch.arange(
+                    (-self.nfft.N[0] + 1) // 2,
+                    (self.nfft.N[0] + 1) // 2,
+                    device=x.device,
+                )
+                kernel_ft = self.fourier_fun(h, scale * scale_factor)
+                out = sliced_fastsum_fft(
                     x,
                     y,
                     x_weights,
