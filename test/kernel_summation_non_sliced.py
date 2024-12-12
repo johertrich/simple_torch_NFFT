@@ -6,7 +6,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch._dynamo.config.cache_size_limit = 1024
 
 d = 2
-kernel = "Gauss"
+kernel = "Riesz"
 kernel_params = {}
 if kernel == "Riesz":
     # choose exponent r for Riesz kernel
@@ -20,10 +20,7 @@ if kernel == "Matern":
 # maybe I will add an adaptive selection for Gauss/Laplace/Matern at some point...
 # higher value for rougher kernel and higher dimension
 n_ft = 1024
-if kernel == "logarithmic":
-    # the logarithmic kernel requires significantly more Fourier coefficients
-    # than other kernels since K(x,y) -> -infty for x-y -> 0.
-    n_ft = n_ft * 64
+
 
 N = 1000
 M = 1000
@@ -42,13 +39,13 @@ fastsum = Fastsum(
     kernel=kernel,
     n_ft=n_ft,
     kernel_params=kernel_params,
-    slicing_mode="non-sliced", 
+    slicing_mode="non-sliced",
     batched_autodiff=False,
 )
 
 # compute naive kernel sum
 s_naive = fastsum.naive(x, y, x_weights, scale)
 # compute fastsum
-s_fastsum = fastsum(x, y, x_weights, scale, 10)
+s_fastsum = fastsum(x, y, x_weights, scale)
 error = torch.sum(torch.abs(s_fastsum - s_naive)) / torch.sum(torch.abs(s_naive))
 print(f"Relative L1-error: {error.item()}")

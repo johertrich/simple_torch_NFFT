@@ -36,7 +36,7 @@ Other optional arguments for the constructor of the `Fastsum` object include (fu
 - Batch sizes: If the memory consumption is too high, the computation can be batched with two batch size parameters:
 	- `batch_size_P`: batch size for the slices
 	- `batch_size_nfft`: batch size for the NFFT (should be smaller or equal `batch_size_P`)
-- `slicing_mode`: By default the slices in the [slicing algorithm](background.md) are chosen iid. The performance can often be increased by using QMC rules. Currently the modes `"iid"`, `"orthogonal"`, `"Sobol"`, `"distance"` and `"spherical_design"` are implemented, see [specification](specification.md) for a description. This choice `"spherical_design"` is only applicable for $d=3$ and $d=4$. The default value is `"spherical_design"` for $d\in\\{3,4\\}$, `"distance"` for $d \leq 100$ but $d\not\in\\{3,4\\}$ and `"orthogonal"` otherwise.
+- `slicing_mode`: By default the slices in the [slicing algorithm](background.md) are chosen iid. The performance can often be increased by using QMC rules. Currently the modes `"iid"`, `"orthogonal"`, `"Sobol"`, `"distance"` and `"spherical_design"` are implemented, see [specification](specification.md) for a description. Additionally, the value `"non-sliced"` can be passed to apply the [non-sliced fast Fourier summation](https://doi.org/10.1137/S1064827502400984). The choice `"spherical_design"` is only applicable for $d=3$ and $d=4$. The default value is `"non-sliced"` for $d\in\\{1,2\\}$ `"spherical_design"` for $d\in\\{3,4\\}$, `"distance"` for $d \leq 100$ but $d\not\in\\{3,4\\}$ and `"orthogonal"` otherwise.
 
 
 
@@ -64,10 +64,3 @@ x_weights = torch.rand(x.shape[0]).to(x)
 
 kernel_sum = fastsum(x, y, x_weights, scale, P) # compute kernel sum
 ```
-
-## Perspectives
-
-In the future, I want to add:
-
-- 1D Summation via KeOps as alternative to NFFT (could be useful in particular, when we are considering a low number of (relevant) Fourier features like, e.g., in the Gaussian kernel)
-- for $d=2$ and $d=3$: add fast Fourier summation (without slicing)

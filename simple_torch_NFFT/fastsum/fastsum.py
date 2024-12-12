@@ -14,6 +14,8 @@ from .basis_funs import (
     Riesz_F,
     Matern_F,
     Gauss_F_ft,
+    Matern_F_ft,
+    F_fun_ft,
 )
 from .functional import (
     sliced_fastsum_fft,
@@ -89,46 +91,77 @@ class Fastsum(torch.nn.Module):
                 x, self.dim, scale, nu
             )
             self.basis_F = lambda x, scale: Matern_F(x, scale, nu, device)
+            self.F_fourier_fun = lambda x, scale: Matern_F_ft(x, self.dim, scale, nu)
         elif kernel == "Laplace":
             self.fourier_fun = lambda x, scale: Matern_kernel_fun_ft(
                 x, self.dim, scale, 0.5
             )
             self.basis_F = Laplace_F
+            self.F_fourier_fun = lambda x, scale: Matern_F_ft(x, self.dim, scale, 0.5)
         elif kernel == "energy":
             self.energy_kernel = True
             self.sliced_factor = compute_sliced_factor(self.dim)
             self.basis_F = energy_F
+            G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale)
+            self.F_fourier_fun = lambda x, scale: F_fun_ft(x, scale, G, self.dim)
         elif kernel == "thin_plate":
             C = compute_thin_plate_constant(self.dim)
             basis_f = lambda x, scale: thin_plate_f(x, scale, C, self.dim)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
             self.basis_F = thin_plate_F
+            G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale)
+            self.F_fourier_fun = lambda x, scale: F_fun_ft(x, scale, G, self.dim)
         elif kernel == "logarithmic":
             C = compute_logarithmic_constant(self.dim)
             basis_f = lambda x, scale: logarithmic_f(x, scale, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
             self.basis_F = logarithmic_F
+            G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale)
+            self.F_fourier_fun = lambda x, scale: F_fun_ft(x, scale, G, self.dim)
         elif kernel == "Riesz":
             r = kernel_params["r"]
             C = compute_Riesz_factor(self.dim, r)
             basis_f = lambda x, scale: Riesz_f(x, scale, r, C)
             self.fourier_fun = lambda x, scale: f_fun_ft(x, scale, basis_f)
             self.basis_F = lambda x, scale: Riesz_F(x, scale, r)
+            G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale)
+            self.F_fourier_fun = lambda x, scale: F_fun_ft(x, scale, G, self.dim)
         elif kernel == "other":
-            assert (
-                "fourier_fun" in kernel_params.keys()
-                or "basis_f" in kernel_params.keys()
-            ), "For custom kernels the Fourier transform of the 1D kernel must be contained in kernel_params"
-            if "fourier_fun" in kernel_params.keys():
-                self.fourier_fun = kernel_params["fourier_fun"]
+            if slicing_mode == "non-sliced":
+                assert (
+                    "F_fourier_fun" in kernel_parameters.keys()
+                    or "basis_F" in kernel_params.keys()
+                    or "G" in kernel_parms.keys()
+                ), "For custom kernels either the basis function F or the function G with K(x,y)=G(x-y) must be specified"
+                if "F_fourier_fun" in kernel_parameters.keys():
+                    self.F_fourier_fun = kernel_params["F_fourier_fun"]
+                else:
+                    if "basis_F" in kernel_params.keys():
+                        G = lambda x, scale: self.basis_F(
+                            torch.sqrt(torch.sum(x**2, -1)), scale
+                        )
+                    else:
+                        G = kernel_params["G"]
+                    self.F_fourier_fun = lambda x, scale: F_fun_ft(
+                        x, scale, G, self.dim
+                    )
             else:
-                self.fourier_fun = lambda x, scale: f_fun_ft(
-                    x, scale, kernel_params["basis_f"]
-                )
+                assert (
+                    "fourier_fun" in kernel_params.keys()
+                    or "basis_f" in kernel_params.keys()
+                ), "For custom kernels the Fourier transform of the 1D kernel must be contained in kernel_params"
+                if "fourier_fun" in kernel_params.keys():
+                    self.fourier_fun = kernel_params["fourier_fun"]
+                else:
+                    self.fourier_fun = lambda x, scale: f_fun_ft(
+                        x, scale, kernel_params["basis_f"]
+                    )
         else:
             raise NameError("Kernel not found!")
 
         if slicing_mode is None:
+            if self.dim in [1, 2]:
+                slicing_mode = "non-sliced"
             if self.dim in [3, 4]:
                 slicing_mode = "spherical_design"
             elif self.dim <= 100:
@@ -231,11 +264,14 @@ class Fastsum(torch.nn.Module):
                 slicing_mode = "orthogonal"
         if slicing_mode == "non-sliced":
             assert (
-                kernel == "Gauss"
-            ), "Non-sliced fast Fourier summation is just implemented for the Gauss kernel so far"
+                kernel != "other"
+            ), "Non-sliced fast Fourier summation is not implemented for custom kernels so far"
             self.non_sliced = True
+            self.batched_autodiff = (
+                False  # batched autodiff does not make sense in this context
+            )
 
-        if nfft is None and not self.energy_kernel:
+        if nfft is None and not (self.energy_kernel and not self.non_sliced):
             if self.non_sliced:
                 self.nfft = NFFT(
                     tuple([n_ft] * self.dim), m=2, device=device, no_compile=no_compile
@@ -352,7 +388,7 @@ class Fastsum(torch.nn.Module):
                 )
 
         else:
-            if self.energy_kernel:
+            if self.energy_kernel and not self.non_sliced:
                 out = (
                     fast_energy_summation(
                         x, y, x_weights, self.sliced_factor, batch_size_P, xis

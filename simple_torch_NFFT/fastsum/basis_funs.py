@@ -57,12 +57,45 @@ def Matern_kernel_fun_ft(grid1d, d, beta, nu):
     return out
 
 
+def Matern_F_ft(grid, d, beta, nu):
+    log_out = (
+        -(2 * nu + d)
+        / 2
+        * torch.log(1 + 2 * np.pi**2 * beta**2 * torch.sum(grid**2, -1) / nu)
+    )
+    log_constant = (
+        scipy.special.loggamma((2 * nu + d) / 2)
+        + d / 2 * np.log(2 * np.pi)
+        + d * torch.log(beta)
+        - scipy.special.loggamma(nu)
+        - d / 2 * np.log(nu)
+    )
+    log_out = log_out + log_constant
+    return torch.exp(log_out)
+
+
 def f_fun_ft(grid1d, scale, f):
     # compute Fourier coefficients of some basis function f via the fft
     n_ft = grid1d.shape[0]
     vect = f(torch.abs(grid1d / n_ft), scale)
     vect_perm = torch.fft.ifftshift(vect)
     kernel_ft = 1 / n_ft * torch.fft.fftshift(torch.fft.fft(vect_perm))
+    return kernel_ft
+
+
+def F_fun_ft(grid, scale, G, d):
+    # compute the Fourier coefficients of G where K(x,y)=G(x-y). If K is radial ,
+    # then, G(x)=F(\|x\|), but generally this also works for other shift-invariant kernels
+    n_ft = grid.shape[0]
+    vect = G(grid / n_ft, scale)
+    vect_perm = torch.fft.ifftshift(vect)
+    if len(grid.shape) == 2:  # grid has d+1 dimensions
+        vect_fft = torch.fft.fft(vect_perm)
+    elif len(grid.shape) == 3:
+        vect_fft = torch.fft.fft2(vect_perm)
+    else:
+        vect_fft = torch.fft.fftn(vect_perm)
+    kernel_ft = 1 / (n_ft**d) * torch.fft.ifftshift(vect_fft)
     return kernel_ft
 
 
@@ -97,11 +130,19 @@ def energy_F(x, scale):
 
 
 def thin_plate_F(x, scale):
-    return (x / scale) ** 2 * (x.abs() / scale).log()
+    out = (x / scale) ** 2 * (x.abs() / scale).log()
+    if isinstance(out, torch.Tensor):
+        out = torch.nan_to_num(out, nan=0.0)
+    return out
 
 
 def logarithmic_F(x, scale):
-    return (x.abs() / scale).log()
+    out = (x.abs() / scale).log()
+    if isinstance(out, torch.Tensor):
+        out = torch.maximum(
+            out, torch.tensor(-10.0, device=x.device, dtype=torch.float)
+        )
+    return out
 
 
 def Riesz_F(x, scale, r):
