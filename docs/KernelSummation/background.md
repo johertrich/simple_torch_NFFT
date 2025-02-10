@@ -107,11 +107,12 @@ The fast kernel summation via slicing was introduced in this paper:
 We proved tighter error bounds and considered the non-iid slicing directions in:
 
 ```
-@article{HJQ2024,
+@inproceedings{HJQ2025,
   title={Fast Summation of Radial Kernels via {QMC} Slicing},
-  author={Hertrich, Johannes and Jahn, Tim and Quellmalz, Michael},
-  journal={arXiv preprint arXiv:2410.01316},
-  year={2024}
+  author={Johannes Hertrich and Tim Jahn and Michael Quellmalz},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025},
+  url={https://openreview.net/forum?id=iNmVX9lx9l}
 }
 ```
 
