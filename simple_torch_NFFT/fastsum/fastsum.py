@@ -129,14 +129,15 @@ class Fastsum(torch.nn.Module):
         elif kernel == "other":
             if slicing_mode == "non-sliced":
                 assert (
-                    "F_fourier_fun" in kernel_parameters.keys()
+                    "F_fourier_fun" in kernel_params.keys()
                     or "basis_F" in kernel_params.keys()
-                    or "G" in kernel_parms.keys()
+                    or "G" in kernel_params.keys()
                 ), "For custom kernels either the basis function F or the function G with K(x,y)=G(x-y) must be specified"
-                if "F_fourier_fun" in kernel_parameters.keys():
+                if "F_fourier_fun" in kernel_params.keys():
                     self.F_fourier_fun = kernel_params["F_fourier_fun"]
                 else:
                     if "basis_F" in kernel_params.keys():
+                        self.basis_f = kernel_params["basis_F"]
                         G = lambda x, scale: self.basis_F(
                             torch.sqrt(torch.sum(x**2, -1)), scale
                         )
@@ -156,6 +157,12 @@ class Fastsum(torch.nn.Module):
                     self.fourier_fun = lambda x, scale: f_fun_ft(
                         x, scale, kernel_params["basis_f"]
                     )
+                if "basis_F" in kernel_params.keys(): # required for naive summation
+                    self.basis_F = kernel_params["basis_F"]
+                    G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale
+                    )
+                elif "G" in kernel_params.keys():
+                    G = kernel_params["G"]
         else:
             raise NameError("Kernel not found!")
 
@@ -191,12 +198,12 @@ class Fastsum(torch.nn.Module):
                         self.xis_dict[P] = torch.tensor(
                             f["xis"][P][()], dtype=torch.float, device=device
                         )
-            elif self.dim <= 100:
+            elif self.dim <= 100 and self.dim > 4:
                 print(
                     "Spherical designs are only available for d=3 and d=4! Therefore distance slices are used!"
                 )
                 slicing_mode = "distance"
-            else:
+            elif self.dim > 100:
                 print(
                     "Spherical designs are only available for d=3 and d=4! Therefore orthogonal slices are used!"
                 )
@@ -292,19 +299,24 @@ class Fastsum(torch.nn.Module):
             xis = torch.randn(P, self.dim, device=device)
             xis = xis / torch.sqrt(torch.sum(xis**2, -1, keepdims=True))
         elif self.slicing_mode == "spherical_design" or self.slicing_mode == "distance":
-            # There is not for any P a corresponding spherical design / set of saved distance slices.
-            # Thus, we increase P to the next large value where a spherical design / set of saved distances slices is available.
-            # If P is larger than the largest available spherical design / set of saved distance slices, we use that one.
-            greater_P = [pp for pp in self.P_list if pp >= P]
-            if len(greater_P) == 0:
-                effP = np.max(self.P_list)
+            # In dimension 2, spherical designs are equispaced points on the (semi-)circle (for even integrands).
+            if self.dim == 2:
+                phi = (torch.arange(P, device=device) + torch.rand((1,), device=device)) * torch.pi / P
+                xis = torch.stack((torch.cos(phi), torch.sin(phi)), dim=1)
             else:
-                effP = np.min(greater_P)
-            xis = self.xis_dict[str(effP)]
-            # random rotations for obtaining an unbiased estimator:
-            rot = torch.randn((self.dim, self.dim), device=device)
-            rot, _ = torch.linalg.qr(rot)
-            xis = torch.matmul(xis, rot)
+                # There is not for any P a corresponding spherical design / set of saved distance slices.
+                # Thus, we increase P to the next large value where a spherical design / set of saved distances slices is available.
+                # If P is larger than the largest available spherical design / set of saved distance slices, we use that one.
+                greater_P = [pp for pp in self.P_list if pp >= P]
+                if len(greater_P) == 0:
+                    effP = np.max(self.P_list)
+                else:
+                    effP = np.min(greater_P)
+                xis = self.xis_dict[str(effP)]
+                # random rotations for obtaining an unbiased estimator:
+                rot = torch.randn((self.dim, self.dim), device=device)
+                rot, _ = torch.linalg.qr(rot)
+                xis = torch.matmul(xis, rot)
         elif self.slicing_mode == "orthogonal":
             rot = torch.randn((P // self.dim + 1, self.dim, self.dim), device=device)
             rot, _ = torch.linalg.qr(rot)
