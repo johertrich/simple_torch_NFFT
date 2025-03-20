@@ -20,7 +20,7 @@ and optional keyword arguments
 
 - `kernel="Gauss"`: string. Name of the used kernel. Possible choices are `"Gauss"`, `"Laplace"`, `"Matern"`, `"energy"`, `"Riesz"`, `"thin_plate"` and `"logarithmic"`. See the [Overview](overview.md) page for a description of the kernels. For using a custom kernel, pass `"other"` and one of the following arguments in the `kernel_params` dictionary:
     - `kernel_params["fourier_fun"]`: must be a function handle of the Fourier transform of the one-dimensional kernel (i.e., the Fourier transform of $f$ in the [background page](background.md))
-    - `kernel_params["basis_f"]`: must be a function handle with the basis function of the one-dimensional kernel (i.e., the function $f$ in the [background page](background.md))
+    - `kernel_params["basis_f"]`: must be a function handle with the basis function of the one-dimensional kernel (i.e., the function $f$ in the [background page](background.md)). The second input of the function handle is a scale parameter that scales linearly with x, i.e., for a function `g` we have `kernel_params["basis_f"] = lambda x, scale: g(x / scale)`.
 - `kernel_params=dict()`: `dict`. An additional dictionary with kernel parameters. This does not contain the scale/bandwidth parameter, but additional parameters like the smoothness parameter `nu` for the Matern kernel.
 - `slicing_mode=None`: string. Selection of the slicing directions $\xi$. The default value is `"spherical_design"` for $d\in\\{3,4\\}$, `"distance"` for $d \leq 100$ but $d\not\in\\{3,4\\}$ and `"orthogonal"` otherwise. Available choices are:
 	-  `"iid"`: chooses the slices iid from the uniform distribution on the sphere.
