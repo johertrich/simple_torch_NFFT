@@ -2,18 +2,20 @@ import torch
 
 
 def fast_fourier_summation(x_proj, y_proj, x_weights, kernel_ft, nfft, take_sum):
-    a = nfft.adjoint(-x_proj, x_weights.reshape(1, 1, -1))
+    a = nfft.adjoint(-x_proj, x_weights.unsqueeze(0).unsqueeze(-2))
     a_time_kernel = a * kernel_ft
     if take_sum:
         return torch.sum(
-            torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1), 0, keepdim=True
+            torch.real(nfft(-y_proj, a_time_kernel)).squeeze(-2), 0, keepdim=True
         )
     else:
         return torch.real(nfft(-y_proj, a_time_kernel)).squeeze(1)
 
 
 def fastsum_fft_precomputations(x, y, scale, x_range):
-    xy_norm = torch.sqrt(torch.sum(torch.cat((x, y), 0) ** 2, -1))
+    x_norm = torch.sqrt(torch.sum(x**2, -1)).reshape(-1)
+    y_norm = torch.sqrt(torch.sum(y**2, -1)).reshape(-1)
+    xy_norm = torch.cat((x_norm, y_norm), 0)
     max_norm = torch.max(xy_norm)
 
     scale_factor = 0.25 * x_range / max_norm
@@ -141,7 +143,9 @@ def sliced_fastsum_fft(
     derivative=False,
 ):
     P = xis.shape[0]
-    M = y.shape[0]
+    M = y.shape[-2]
+    batch_dims_y = list(y.shape[:-2])
+    batch_dims_x = list(x.shape[:-2])
     if batch_size_P is None:
         batch_size_P = P
     if batch_size_nfft is None:
@@ -151,12 +155,16 @@ def sliced_fastsum_fft(
     if derivative:
         kernel_ft = kernel_ft * (2 * torch.pi * 1j * h) ** derivative
 
-    xi = xis.unsqueeze(1)
+    xi = xis.view([P] + (len(batch_dims_y) + 1) * [1] + [xis.shape[-1]])
 
     def with_projections(xi):
         P_local = xi.shape[0]
-        x_proj = (xi @ x.T).reshape(P_local, 1, -1, 1)
-        y_proj = (xi @ y.T).reshape(P_local, 1, -1, 1)
+        x_proj = (xi @ x.transpose(-1, -2)).reshape(
+            [P_local] + batch_dims_x + [1, -1, 1]
+        )
+        y_proj = (xi @ y.transpose(-1, -2)).reshape(
+            [P_local] + batch_dims_y + [1, -1, 1]
+        )
         outs = torch.cat(
             [
                 fast_fourier_summation(
@@ -171,6 +179,7 @@ def sliced_fastsum_fft(
             ],
             0,
         )
+        print(outs.shape)
 
         if derivative:
             return (
