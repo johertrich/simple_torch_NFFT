@@ -80,7 +80,7 @@ class SlicedFastsumFFTAutograd(torch.autograd.Function):
                 ctx.batch_size_nfft,
                 derivative=True,
             )
-            grad_x = grad_x * x_weights[:, None] * scale_factor
+            grad_x = grad_x * x_weights.unsqueeze(-1) * scale_factor
         if ctx.needs_input_grad[1]:
             grad_y = sliced_fastsum_fft(
                 x,
@@ -94,7 +94,7 @@ class SlicedFastsumFFTAutograd(torch.autograd.Function):
                 ctx.batch_size_nfft,
                 derivative=True,
             )
-            grad_y = grad_y * grad_output[:, None] * scale_factor
+            grad_y = grad_y * grad_output.unsqueeze(-1) * scale_factor
         if ctx.needs_input_grad[2]:
             grad_x_weights = sliced_fastsum_fft(
                 y,
@@ -146,6 +146,13 @@ def sliced_fastsum_fft(
     M = y.shape[-2]
     batch_dims_y = list(y.shape[:-2])
     batch_dims_x = list(x.shape[:-2])
+    batch_dims_weights = list(x_weights.shape[:-1])
+    batch_dims = [
+        max(batch_dims_x[i], batch_dims_y[i]) for i in range(len(batch_dims_x))
+    ]
+    batch_dims = [
+        max(batch_dims[i], batch_dims_weights[i]) for i in range(len(batch_dims))
+    ]
     if batch_size_P is None:
         batch_size_P = P
     if batch_size_nfft is None:
@@ -179,18 +186,11 @@ def sliced_fastsum_fft(
             ],
             0,
         )
-        print(outs.shape)
 
         if derivative:
-            return (
-                torch.nn.functional.conv1d(
-                    xi.squeeze().transpose(0, 1).flatten().reshape([1, 1, -1]),
-                    outs.transpose(0, 1).unsqueeze(1),
-                    stride=P_local,
-                )
-                .squeeze()
-                .unsqueeze(0)
-            )
+            outs = outs.view([P_local, -1, y_proj.shape[-1]])
+            backprojected = torch.einsum("pd,pbn->bnd", xi.squeeze(), outs).unsqueeze(0)
+            return backprojected.view([1] + batch_dims + list(y.shape[-2:]))
         else:
             return torch.sum(outs, 0, keepdim=True)
 
@@ -220,12 +220,12 @@ class FastsumEnergyAutograd(torch.autograd.Function):
             grad_x = fast_energy_summation_grad(
                 y, x, grad_output, ctx.sliced_factor, ctx.batch_size, xis
             )
-            grad_x = grad_x * x_weights[:, None]
+            grad_x = grad_x * x_weights.unsqueeze(-1)
         if ctx.needs_input_grad[1]:
             grad_y = fast_energy_summation_grad(
                 x, y, x_weights, ctx.sliced_factor, ctx.batch_size, xis
             )
-            grad_y = grad_y * grad_output[:, None]
+            grad_y = grad_y * grad_output.unsqueeze(-1)
         if ctx.needs_input_grad[2]:
             grad_x_weights = fast_energy_summation(
                 y, x, grad_output, ctx.sliced_factor, ctx.batch_size, xis
@@ -273,15 +273,41 @@ def fastsum_energy_kernel_1D(x, x_weights, y):
 
 def fast_energy_summation(x, y, x_weights, sliced_factor, batch_size, xis):
     # fast sum via slicing and sorting
-    d = x.shape[1]
+    d = x.shape[-1]
     P = xis.shape[0]
+    batch_dims_y = list(y.shape[:-2])
+    batch_dims_x = list(x.shape[:-2])
+    batch_dims_weights = list(x_weights.shape[:-1])
+    batch_dims = [
+        max(batch_dims_x[i], batch_dims_y[i]) for i in range(len(batch_dims_x))
+    ]
+    batch_dims = [
+        max(batch_dims[i], batch_dims_weights[i]) for i in range(len(batch_dims))
+    ]
+    xis = xis.view([P] + (len(batch_dims_y) + 1) * [1] + [xis.shape[-1]])
+    x_weights = x_weights.tile(
+        [batch_dims[i] // batch_dims_weights[i] for i in range(len(batch_dims))] + [1]
+    )
 
     def with_projections(xi):
         P_local = xi.shape[0]
-        x_proj = (xi @ x.T).reshape(P_local, -1)
-        y_proj = (xi @ y.T).reshape(P_local, -1)
-        fastsum_energy = fastsum_energy_kernel_1D(
-            x_proj, x_weights[None, :].tile(P_local, 1), y_proj
+        x_proj = (xi @ x.transpose(-2, -1)).reshape([P_local] + batch_dims_x + [-1])
+        y_proj = (xi @ y.transpose(-2, -1)).reshape([P_local] + batch_dims_y + [-1])
+        # resolve broadcasting
+        x_proj = x_proj.tile(
+            [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
+        )
+        y_proj = y_proj.tile(
+            [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
+        )
+        x_w = x_weights.unsqueeze(-2).tile(len(batch_dims) * [1] + [P_local, 1])
+
+        x_proj = x_proj.view(-1, x_proj.shape[-1])
+        y_proj = y_proj.view(-1, y_proj.shape[-1])
+        x_w = x_w.view(-1, x_w.shape[-1])
+        fastsum_energy = fastsum_energy_kernel_1D(x_proj, x_w, y_proj)
+        fastsum_energy = fastsum_energy.view(
+            [P_local] + batch_dims + [y_proj.shape[-1]]
         )
         return sliced_factor * torch.sum(-fastsum_energy, 0)
 
@@ -323,24 +349,43 @@ def fastsum_energy_kernel_1D_grad(x, x_weights, y):
 
 def fast_energy_summation_grad(x, y, x_weights, sliced_factor, batch_size, xis):
     # fast sum gradient via slicing and sorting
-    d = x.shape[1]
+    d = x.shape[-1]
     P = xis.shape[0]
+    batch_dims_y = list(y.shape[:-2])
+    batch_dims_x = list(x.shape[:-2])
+    batch_dims_weights = list(x_weights.shape[:-1])
+    batch_dims = [
+        max(batch_dims_x[i], batch_dims_y[i]) for i in range(len(batch_dims_x))
+    ]
+    batch_dims = [
+        max(batch_dims[i], batch_dims_weights[i]) for i in range(len(batch_dims))
+    ]
+    xis = xis.view([P] + (len(batch_dims_y) + 1) * [1] + [xis.shape[-1]])
+    x_weights = x_weights.tile(
+        [batch_dims[i] // batch_dims_weights[i] for i in range(len(batch_dims))] + [1]
+    )
 
     def with_projections(xi):
         P_local = xi.shape[0]
-        x_proj = (xi @ x.T).reshape(P_local, -1)
-        y_proj = (xi @ y.T).reshape(P_local, -1)
-        outs = (
-            -fastsum_energy_kernel_1D_grad(
-                x_proj, x_weights[None, :].tile(P_local, 1), y_proj
-            )
-            * sliced_factor
+        x_proj = (xi @ x.transpose(-2, -1)).reshape([P_local] + batch_dims_x + [-1])
+        y_proj = (xi @ y.transpose(-2, -1)).reshape([P_local] + batch_dims_y + [-1])
+        # resolve broadcasting
+        x_proj = x_proj.tile(
+            [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
         )
-        return torch.nn.functional.conv1d(
-            xi.squeeze().transpose(0, 1).flatten().reshape([1, 1, -1]),
-            outs.transpose(0, 1).unsqueeze(1),
-            stride=P_local,
-        ).squeeze()
+        y_proj = y_proj.tile(
+            [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
+        )
+        x_w = x_weights.unsqueeze(-2).tile(len(batch_dims) * [1] + [P_local, 1])
+
+        x_proj = x_proj.view(-1, x_proj.shape[-1])
+        y_proj = y_proj.view(-1, y_proj.shape[-1])
+        x_w = x_w.view(-1, x_w.shape[-1])
+        outs = -fastsum_energy_kernel_1D_grad(x_proj, x_w, y_proj) * sliced_factor
+        ti = outs.shape[0] // P_local
+        outs = outs.view([P_local, ti, y_proj.shape[-1]])
+        backprojected = torch.einsum("pd,pbn->bnd", xi.squeeze(), outs)
+        return backprojected.view(batch_dims + list(y.shape[-2:]))
 
     return (
         torch.sum(
