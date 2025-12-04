@@ -5,7 +5,7 @@ In this library, we implement the following methods:
 - **Non-equispaced fast Fourier transform (NFFT)**: We implement the NFFT directly in PyTorch for arbitrary dimensions. It runs on a GPU, supports autograd (wrt both, function values and basis points)
 and allows batching. 
 
-- **Fast Kernel Summations via Slicing**: We apply the NFFT for the computation of large kernel sums in arbitrary dimensions.
+- **Fast Kernel Summations via Slicing**: We apply the NFFT for the computation of large kernel sums in arbitrary dimensions. The implementation supports batching.
 
 It requires only PyTorch (>= 2.5 recommended) and NumPy and can be installed with
 ```
