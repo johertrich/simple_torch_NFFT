@@ -300,7 +300,7 @@ def fast_energy_summation(x, y, x_weights, sliced_factor, batch_size, xis):
         y_proj = y_proj.tile(
             [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
         )
-        x_w = x_weights.unsqueeze(-2).tile(len(batch_dims) * [1] + [P_local, 1])
+        x_w = x_weights.unsqueeze(0).tile([P_local] + len(batch_dims) * [1] + [1])
 
         x_proj = x_proj.view(-1, x_proj.shape[-1])
         y_proj = y_proj.view(-1, y_proj.shape[-1])
@@ -376,7 +376,7 @@ def fast_energy_summation_grad(x, y, x_weights, sliced_factor, batch_size, xis):
         y_proj = y_proj.tile(
             [batch_dims[i] // batch_dims_x[i] for i in range(len(batch_dims))] + [1, 1]
         )
-        x_w = x_weights.unsqueeze(-2).tile(len(batch_dims) * [1] + [P_local, 1])
+        x_w = x_weights.unsqueeze(0).tile([P_local] + len(batch_dims) * [1] + [1])
 
         x_proj = x_proj.view(-1, x_proj.shape[-1])
         y_proj = y_proj.view(-1, y_proj.shape[-1])
