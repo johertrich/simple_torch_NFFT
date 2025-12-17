@@ -28,7 +28,7 @@ Note: A better treatment for kernels which are non-smooth or singular at $x=y$ i
 
 To use the fast kernel summation, we first create a `Fastsum` object with `fastsum=Fastsum(d, kernel="Gauss")`. It takes the dimension and the kernel (as string from the above list) as input. 
 
-Afterwards, we can compute the vector $s=(s_1,...,s_M)$ by `s=fastsum(x, y, w, xis_or_P)` where `x` has the shape `(N,d)`, `y` has the shape `(M,d)` and `w` has the shape `(N,)`. The argument `xis_or_P` either takes the number of considered slices as integer (higher number = higher accuracy) or the slices itself as a tensor of size `(P,d)`.
+Afterwards, we can compute the vector $s=(s_1,...,s_M)$ by `s=fastsum(x, y, w, xis_or_P)` where `x` has the shape `(...,N,d)`, `y` has the shape `(...,M,d)` and `w` has the shape `(...,N)`. The argument `xis_or_P` either takes the number of considered slices as integer (higher number = higher accuracy) or the slices itself as a tensor of size `(P,d)`. The `fastsum` method supports batching. That is, we can add arbitrary many dimensions in the beginning of each of the tensors `x`, `y` and `w`. The number of batching dimensions has to be the same for all inputs, but broadcasting is supported (i.e., expanding batching dimensions of size `1`).
 
 Other optional arguments for the constructor of the `Fastsum` object include (full list in the [specification](specification.md)):
 

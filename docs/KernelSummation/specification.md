@@ -42,11 +42,11 @@ The forward method is given by
 ```
 s = fastsum(x, y, x_weights, scale, xis_or_P) # coincides with fastsum.forward(x, y, x_weights, scale, xis_or_P)
 ```
-with required arguments:
+with required arguments (`...` refers to batching dimensions, the number of batching dimensions has to agree for all inputs):
 
-- `x`: `torch.Tensor`. Input points `x` of shape `(N,d)`
-- `y`: `torch.Tensor`. Output points `y` of shape `(M,d)`
-- `x_weights`: `torch.Tensor`: weights $w_n$ for the input points of shape `(N,)`
+- `x`: `torch.Tensor`. Input points `x` of shape `(...,N,d)`
+- `y`: `torch.Tensor`. Output points `y` of shape `(...,M,d)`
+- `x_weights`: `torch.Tensor`: weights $w_n$ for the input points of shape `(...,N)`
 - `xis_or_P`: int or `torch.Tensor`. If it is a tensor, then it should contain the slicing directions and should be of shape `(P,d)`. Alternatively, one can just pass the number `P` of slices. In this case the slices will be computed by the slicing rule accordingly to the `slicing_mode` argument in the constructor.
 
 and output

@@ -157,9 +157,10 @@ class Fastsum(torch.nn.Module):
                     self.fourier_fun = lambda x, scale: f_fun_ft(
                         x, scale, kernel_params["basis_f"]
                     )
-                if "basis_F" in kernel_params.keys(): # required for naive summation
+                if "basis_F" in kernel_params.keys():  # required for naive summation
                     self.basis_F = kernel_params["basis_F"]
-                    G = lambda x, scale: self.basis_F(torch.sqrt(torch.sum(x**2, -1)), scale
+                    G = lambda x, scale: self.basis_F(
+                        torch.sqrt(torch.sum(x**2, -1)), scale
                     )
                 elif "G" in kernel_params.keys():
                     G = kernel_params["G"]
@@ -301,7 +302,11 @@ class Fastsum(torch.nn.Module):
         elif self.slicing_mode == "spherical_design" or self.slicing_mode == "distance":
             # In dimension 2, spherical designs are equispaced points on the (semi-)circle (for even integrands).
             if self.dim == 2:
-                phi = (torch.arange(P, device=device) + torch.rand((1,), device=device)) * torch.pi / P
+                phi = (
+                    (torch.arange(P, device=device) + torch.rand((1,), device=device))
+                    * torch.pi
+                    / P
+                )
                 xis = torch.stack((torch.cos(phi), torch.sin(phi)), dim=1)
             else:
                 # There is not for any P a corresponding spherical design / set of saved distance slices.
