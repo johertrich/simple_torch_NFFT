@@ -167,6 +167,8 @@ class Fastsum(torch.nn.Module):
         else:
             raise NameError("Kernel not found!")
 
+        self.batched_autodiff = batched_autodiff
+
         if slicing_mode is None:
             if self.dim in [1, 2]:
                 slicing_mode = "non-sliced"
@@ -293,7 +295,6 @@ class Fastsum(torch.nn.Module):
         self.batch_size_P = batch_size_P
         self.batch_size_nfft = batch_size_nfft
         self.x_range = x_range
-        self.batched_autodiff = batched_autodiff
 
     def get_xis(self, P, device):
         if self.slicing_mode == "iid":
