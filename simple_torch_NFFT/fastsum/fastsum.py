@@ -170,7 +170,7 @@ class Fastsum(torch.nn.Module):
         if slicing_mode is None:
             if self.dim in [1, 2]:
                 slicing_mode = "non-sliced"
-            if self.dim in [3, 4]:
+            elif self.dim in [3, 4]:
                 slicing_mode = "spherical_design"
             elif self.dim <= 100:
                 slicing_mode = "distance"
